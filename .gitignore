@@ -1,15 +1,3 @@
-# Dependencies
 node_modules/
-
-# Env & local data
-id.env
 .env
-data/
-*.sqlite
-*.db
-
-# OS / editor
-.DS_Store
-*.log
-.idea/
-.vscode/
+package-lock.json
