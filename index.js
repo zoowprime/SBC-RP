@@ -1,3 +1,7 @@
-// Point d'entrée — squelette sans logique.
-// TODO: importer discord.js, créer le client, charger dynamiquement commands et events depuis src/*
-console.log("GTA RP Bot skeleton — ajoute ton code dans src/"); 
+// index.js
+import 'dotenv/config';
+
+// On importe directement le bot principal
+import './src/bot.js';
+
+console.log("🚀 Lancement du bot GTA RP...");
