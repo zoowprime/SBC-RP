@@ -41,8 +41,7 @@ async function sendLog(msg) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
-// 3) Événements globaux (ajoute ici au fur et à mesure)
-//    ⚠️ On ne garde que ce qui existe déjà pour SBC (pas de brouillon)
+// 3) Événements globaux (on ne garde QUE ceux qui existent pour SBC)
 require('./events/welcome.js')(client);
 require('./events/qcmNoCmd')(client);
 
