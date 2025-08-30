@@ -9,7 +9,6 @@ const {
   ChannelType,
   PermissionsBitField,
   ComponentType,
-  MessageFlags,
 } = require('discord.js');
 const QUESTIONS = require('../data/qcmQuestions.json');
 
@@ -34,13 +33,10 @@ module.exports = (client) => {
       .setTitle('Bonjour !')
       .setDescription(
         `Vous êtes dans le salon pour faire votre QCM. Avant toute chose, vous devez connaître ces salons :
-` +
-        `<#${process.env.SALON_1_REGLES}>
-` +
-        `<#${process.env.SALON_2_LORE}>
+<#${process.env.SALON_1_REGLES}>
+<#${process.env.SALON_2_LORE}>
 
-` +
-        `Une fois cela fait, ouvrez le menu déroulant ci‑dessous et sélectionnez **Débuter le QCM**.`
+Une fois cela fait, ouvrez le menu déroulant ci-dessous et sélectionnez **Débuter le QCM**.`
       )
       .setColor(VIOLET);
 
@@ -67,9 +63,9 @@ module.exports = (client) => {
         if (process.env.QCM_A_FAIRE_ROLE_ID) {
           await member.roles.remove(process.env.QCM_A_FAIRE_ROLE_ID).catch(() => {});
         }
-        await interaction.reply({ content: '✅ Vous avez reçu le rôle **QCM EN COURS** ! Création du salon…', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: '✅ Vous avez reçu le rôle **QCM EN COURS** ! Création du salon…', ephemeral: true });
       } catch (e) {
-        return interaction.reply({ content: '❗ Impossible de préparer votre QCM (permissions ?).', flags: MessageFlags.Ephemeral }).catch(() => {});
+        return interaction.reply({ content: '❗ Impossible de préparer votre QCM (permissions ?).', ephemeral: true }).catch(() => {});
       }
 
       // création du salon
@@ -78,7 +74,7 @@ module.exports = (client) => {
         channel = await interaction.guild.channels.create({
           name: `qcm-${member.user.username}`,
           type: ChannelType.GuildText,
-          parent: process.env.QCM_START_CATEGORY_ID,
+          parent: process.env.QCM_START_CATEGORY_ID || null,
           permissionOverwrites: [
             { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
             { id: member.id,            allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
@@ -86,13 +82,13 @@ module.exports = (client) => {
           ],
         });
       } catch (e) {
-        return interaction.followUp({ content: '❗ Impossible de créer le salon du QCM (permissions ?).', flags: MessageFlags.Ephemeral }).catch(() => {});
+        return interaction.followUp({ content: '❗ Impossible de créer le salon du QCM (permissions ?).', ephemeral: true }).catch(() => {});
       }
 
       // envoi du menu oui/non de démarrage
       const startEmbed = new EmbedBuilder()
         .setColor(VIOLET)
-        .setTitle('Souhaitez‑vous lancer le QCM ?')
+        .setTitle('Souhaitez-vous lancer le QCM ?')
         .setDescription('Sélectionnez **Oui** pour démarrer, **Non** pour annuler.');
 
       const startRow = new ActionRowBuilder().addComponents(
@@ -110,7 +106,7 @@ module.exports = (client) => {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('qcm_start_')) {
       const userId = interaction.customId.split('_')[2];
       if (interaction.user.id !== userId) {
-        return interaction.reply({ content: '❌ Ce menu n’est pas pour vous.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: '❌ Ce menu n’est pas pour vous.', ephemeral: true });
       }
 
       const choice = interaction.values[0];
@@ -179,8 +175,7 @@ module.exports = (client) => {
         .setTitle('QCM terminé')
         .setDescription(
           `Vous avez obtenu **${channel.qcmScore} / 30** réponses correctes.
-` +
-          (passed
+` + (passed
             ? '🎉 Bravo, vous avez réussi ! Cliquez sur le bouton pour terminer.'
             : '❌ Vous n’avez pas atteint 20 bonnes réponses. Vous pourrez réessayer dans 24h.')
         );
@@ -200,7 +195,7 @@ module.exports = (client) => {
     if (interaction.isButton() && interaction.customId.startsWith('qcm_finish_')) {
       const userId = interaction.customId.split('_')[2];
       if (interaction.user.id !== userId) {
-        return interaction.reply({ content: '❌ Ce bouton n’est pas pour vous.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: '❌ Ce bouton n’est pas pour vous.', ephemeral: true });
       }
 
       const channel = interaction.channel;
@@ -254,7 +249,7 @@ module.exports = (client) => {
     if (interaction.isButton() && interaction.customId.startsWith('qcm_delete_')) {
       const isStaff = interaction.member.roles.cache.has(process.env.STAFF_ROLE_ID);
       if (!isStaff) {
-        return interaction.reply({ content: '❌ Seul le staff peut supprimer ce salon.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: '❌ Seul le staff peut supprimer ce salon.', ephemeral: true });
       }
 
       await interaction.deferUpdate().catch(() => {});
