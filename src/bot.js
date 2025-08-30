@@ -1,5 +1,5 @@
 // src/bot.js
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -15,6 +15,9 @@ import {
 // Résolution de chemin ESM (équivalent __dirname)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
+
+// Charge id.env à la racine du projet (../id.env)
+dotenv.config({ path: join(__dirname, '..', 'id.env') });
 
 // ───────────────────────────────────────────────────────────────────────────────
 // Variables d'environnement (IDs depuis id.env, token depuis Render)
