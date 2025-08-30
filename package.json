@@ -9,6 +9,8 @@
     "start": "node index.js",
     "deploy": "node deploy-commands.js"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.1"
+  }
 }
