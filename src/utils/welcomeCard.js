@@ -8,7 +8,7 @@ memberCount,
 isWelcome = true
 }) {
 // Charge le fond à sa taille native
-const bgPath = path.join(\_\_dirname, '../assets/welcome\_bg.png');
+const bgPath = path.join(\_\_dirname, '../assets/welcome_bg.png');
 const bg    = await loadImage(bgPath);
 const width = bg.width;
 const height= bg.height;
