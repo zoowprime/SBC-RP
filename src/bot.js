@@ -44,6 +44,7 @@ async function sendLog(msg) {
 // 3) Événements globaux (on ne garde QUE ceux qui existent pour SBC)
 require('./events/welcome.js')(client);
 require('./events/qcmNoCmd')(client);
+require('./events/candidature')(client);
 
 // ───────────────────────────────────────────────────────────────────────────────
 // 4) Chargement des commandes slash (src/commands/*.js)
