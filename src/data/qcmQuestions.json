@@ -1,0 +1,153 @@
+
+[
+  {
+    "question": "Qui a découvert l'île de Belleshore ?",
+    "choices": ["Edmond Bellerive", "Edmond Dantès", "Joshua Bellerive"],
+    "answer": "Edmond Bellerive"
+  },
+  {
+    "question": "Quand l'île Belleshore a été découverte ?",
+    "choices": ["1497", "1789", "1527"],
+    "answer": "1527"
+  },
+  {
+    "question": "Le fait de faire ressentir la peur de votre personnage s’appelle :",
+    "choices": ["Le pain RP", "Le mass RP", "Le fear RP"],
+    "answer": "Le pain RP"
+  },
+  {
+    "question": "Le fait d’effectuer des actions irréalisables dans la vraie vie s’appelle :",
+    "choices": ["Le metagaming", "Le powergaming", "Le mixe RP"],
+    "answer": "Le powergaming"
+  },
+  {
+    "question": "Qui est le chef ultime de l’état ?",
+    "choices": ["Le gouverneur", "Les staffs (zow le plus beau)", "Le marshall"],
+    "answer": "Le gouverneur"
+  },
+  {
+    "question": "Un bandana ou un masque peut vous rendre :",
+    "choices": ["Invincible", "Invisible", "Anonyme"],
+    "answer": "Anonyme"
+  },
+  {
+    "question": "Combien de temps peut durer maximum une scène de torture ?",
+    "choices": ["15 minutes", "5 minutes", "10 minutes"],
+    "answer": "5 minutes"
+  },
+  {
+    "question": "Qui est le chef ultime des représentants de la loi ?",
+    "choices": ["Le gouverneur", "Les staffs (zow le plus beau)", "Le marshall"],
+    "answer": "Le marshall"
+  },
+  {
+    "question": "Quelle interdiction avez-vous à cheval ?",
+    "choices": ["Piétiner et tuer un joueur", "Sortir une arme", "Utiliser votre cheval"],
+    "answer": "Piétiner et tuer un joueur"
+  },
+  {
+    "question": "Durant des événements légaux, les scènes illégales sont-elles autorisées ?",
+    "choices": ["Je sais pas", "Oui", "Non"],
+    "answer": "Non"
+  },
+  {
+    "question": "Combien faut-il d’otages pour faire un braquage de banque ?",
+    "choices": ["5", "3", "1"],
+    "answer": "3"
+  },
+  {
+    "question": "Ai-je le droit d’entamer un gunfight contre d'autres joueurs avant d’avoir effectué une scène dite 'parlée' ?",
+    "choices": ["Oui", "Je sais pas", "Non"],
+    "answer": "Non"
+  },
+  {
+    "question": "Le MassRP est-il à prendre en compte dans les zones peuplées ?",
+    "choices": ["Oui", "Non", "Pas forcément"],
+    "answer": "Oui"
+  },
+  {
+    "question": "Quelle est l’année du serveur ?",
+    "choices": ["1885", "1890", "1895"],
+    "answer": "1895"
+  },
+  {
+    "question": "Quelle entité se trouve tout en haut de l’arbre hiérarchique du serveur ?",
+    "choices": ["Le gouvernement", "Les staffs (zoow le plus beau)", "Les mafia"],
+    "answer": "Le gouvernement"
+  },
+  {
+    "question": "Quel personnage met en place le plan économique ayant sauvé Belleshore de la famine ?",
+    "choices": ["Charles Sorel", "Amadeus T. Watford", "Seth Fitzgerald"],
+    "answer": "Amadeus T. Watford"
+  },
+  {
+    "question": "Quelle est la durée approximative de la Guerre d’un An ?",
+    "choices": ["6 mois", "1 an", "2 ans"],
+    "answer": "1 an"
+  },
+  {
+    "question": "Quel est le délai minimum avant de relancer une guerre contre un clan ?",
+    "choices": ["1 semaine", "2 semaines", "3 jours"],
+    "answer": "2 semaines"
+  },
+  {
+    "question": "Si un shérif est soudoyé, il est soumis à :",
+    "choices": ["Un mute RP", "Un warn", "Un fear envers le gang/mafia"],
+    "answer": "Un fear envers le gang/mafia"
+  },
+  {
+    "question": "Quel pourcentage d'argent liquide maximum peut-on racketter ?",
+    "choices": ["100 %", "75 %", "50 %"],
+    "answer": "50 %"
+  },
+  {
+    "question": "Peut-on forcer quelqu’un à retirer en banque ou fouiller son coffre ?",
+    "choices": ["Oui", "Non", "Uniquement en cas de guerre"],
+    "answer": "Non"
+  },
+  {
+    "question": "Combien d’armes peut-on racketter selon les règles ?",
+    "choices": ["1 arme", "Toutes les armes", "2 armes max"],
+    "answer": "1 arme"
+  },
+  {
+    "question": "Peut-on siffler son cheval en pleine montagne ?",
+    "choices": ["Oui", "Non", "Seulement si on est blessé"],
+    "answer": "Non"
+  },
+  {
+    "question": "Quelle règle interdit de zigzaguer pour éviter les balles ?",
+    "choices": ["Fear RP", "Win RP", "Snake RP"],
+    "answer": "Snake RP"
+  },
+  {
+    "question": "Que représente le “Loose RP” ?",
+    "choices": ["Forcer la victoire", "Perdre une scène RP sans contester", "Se cacher pour éviter l’interaction"],
+    "answer": "Perdre une scène RP sans contester"
+  },
+  {
+    "question": "Quels groupes s’opposent durant la guerre civile dans l’Est ?",
+    "choices": ["Les fermiers et les banquiers", "Pro‑mexicains et partisans de l’Union", "Militaires et religieux"],
+    "answer": "Pro‑mexicains et partisans de l’Union"
+  },
+  {
+    "question": "Quelle forme prend la guerre dans l’Est de Belleshore ?",
+    "choices": ["Une guerre religieuse", "Une guerre civile", "Une guerre navale"],
+    "answer": "Une guerre civile"
+  },
+  {
+    "question": "À quelles conditions peux-tu utiliser une arme achetée dans RDO ?",
+    "choices": ["Si elle est équipée", "Si elle est RP et achetée en boutique", "Si elle a été achetée auprès d’un armurier en RP"],
+    "answer": "Si elle a été achetée auprès d’un armurier en RP"
+  },
+  {
+    "question": "Que dois-tu obligatoirement retirer pour jouer en session RP ?",
+    "choices": ["Les armes automatiques", "Les cartes de compétence", "Le viseur"],
+    "answer": "Les cartes de compétence"
+  },
+  {
+    "question": "Quelle règle s’applique aux doubles pistolets (hors revolver) ?",
+    "choices": ["Interdits en ville", "Autorisés uniquement à cheval", "Interdits en jeu"],
+    "answer": "Interdits en jeu"
+  }
+]
