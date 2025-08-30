@@ -1,16 +1,17 @@
 {
   "name": "sbc-rp",
-  "version": "0.0.1",
-  "private": true,
-  "type": "module",
-  "description": "Bot Discord GTA RP - SBC",
+  "version": "1.0.0",
+  "description": "Bot Discord SBC-RP (CommonJS, style OTW)",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "deploy": "node deploy-commands.js"
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
-    "discord.js": "^14.15.3",
-    "dotenv": "^16.4.5"
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "canvas": "^2.11.2"
   }
 }
