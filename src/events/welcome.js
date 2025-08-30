@@ -3,15 +3,15 @@ const { generateCard }      = require('../utils/welcomeCard');
 require('dotenv').config({ path: './id.env' });
 
 module.exports = (client) => {
-const WELCOME\_CHAN = process.env.WELCOME\_CHANNEL\_ID;
-const FAREWELL\_CHAN = process.env.FAREWELL\_CHANNEL\_ID || WELCOME\_CHAN;
-const ROLE\_ON\_JOIN  = process.env.WELCOME\_ROLE\_ID;
+const WELCOME_CHAN = process.env.WELCOME_CHANNEL_ID;
+const FAREWELL_CHAN = process.env.FAREWELL_CHANNEL_ID || WELCOME_CHAN;
+const ROLE_ON_JOIN  = process.env.WELCOME_ROLE_ID;
 
 client.on('guildMemberAdd', async member => {
 try {
 // 1) Rôle d’accueil
-if (ROLE\_ON\_JOIN) {
-const r = member.guild.roles.cache.get(ROLE\_ON\_JOIN);
+if (ROLE_ON_JOIN) {
+const r = member.guild.roles.cache.get(ROLE_ON_JOIN);
 if (r) await member.roles.add(r);
 }
 
