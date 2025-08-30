@@ -44,6 +44,7 @@ async function sendLog(msg) {
 
 // ───────────────────────────────────────────────────────────────────────────────
 // 3) Événements globaux (spécifiques SBC)
+require('./events/starterPack')(client);
 require('./events/welcome.js')(client);
 require('./events/qcmNoCmd')(client);
 try {
