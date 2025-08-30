@@ -1,7 +1,9 @@
 {
-  "name": "gta-rp-bot-skeleton",
+  "name": "sbc-rp",
   "version": "0.0.1",
+  "private": true,
   "type": "module",
+  "description": "Bot Discord GTA RP - SBC",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
