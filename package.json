@@ -1,16 +1,16 @@
 {
-  "name": "gta-rp-bot-skeleton",
+  "name": "sbc-rp",
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "description": "Squelette de bot GTA RP (Discord) — sans scripts copiés, prêt à compléter.",
+  "description": "Bot Discord GTA RP - SBC",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "deploy": "node deploy-commands.js"
   },
   "dependencies": {
-    "discord.js": "^14.22.1",
-    "dotenv": "^17.2.1"
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
   }
 }
