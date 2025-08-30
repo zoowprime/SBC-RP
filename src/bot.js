@@ -1,54 +1,25 @@
-// src/bot.js (ESM mix) — charge id.env (SBC), utilise require() pour events/commands, et garde l’arbo pour étendre
-import dotenv from 'dotenv';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import {
-  Client,
-  GatewayIntentBits,
-  Collection,
-  Partials,
-  Events,
-} from 'discord.js';
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
+// src/bot.js (CommonJS) — style OTW, env à la SBC, logs démarrage/arrêt
+require('dotenv').config({ path: './id.env' });
+const { Client, GatewayIntentBits, Collection, MessageFlags, Events } = require('discord.js');
+const fs   = require('fs');
+const path = require('path');
 
 // ───────────────────────────────────────────────────────────────────────────────
-// Résolution de chemin ESM (équivalent __dirname)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = dirname(__filename);
-
-// Charge id.env à la racine du projet (../id.env)
-dotenv.config({ path: join(__dirname, '..', 'id.env') });
-
-// ───────────────────────────────────────────────────────────────────────────────
-// Variables d'environnement (IDs depuis id.env, token depuis Render)
+// 0) Variables d’environnement (IDs depuis id.env, token depuis l’hébergeur)
 const {
-  BOT_TOKEN,                    // (Render uniquement)
-  CLIENT_ID,
-  GUILD_ID,
-  DATA_DIR = '/data',
-  LOG_CHANNEL_ID,               // optionnel
+  BOT_TOKEN,              // fourni par Render/host
+  GUILD_ID,               // optionnel (pour log)
+  DATA_DIR = '/data',     // optionnel (persist)
+  LOG_CHANNEL_ID,         // optionnel (channel de logs)
 } = process.env;
 
-// Sanity checks
 if (!BOT_TOKEN) {
-  console.error('❌ BOT_TOKEN manquant. Ajoute-le dans les variables d’environnement Render (ou en local pour tester).');
+  console.error('❌ BOT_TOKEN manquant. Ajoute-le dans les variables d’environnement.');
   process.exit(1);
-}
-if (!CLIENT_ID || !GUILD_ID) {
-  console.warn('⚠️ CLIENT_ID/GUILD_ID absents. Le bot peut démarrer, mais le déploiement de slash-commands pourra échouer.');
-}
-
-// Crée le dossier data si besoin
-try {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-} catch (e) {
-  console.warn('⚠️ Impossible de créer DATA_DIR :', DATA_DIR, e?.message);
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
-// Client Discord
+// 1) Client Discord
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -56,122 +27,88 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
   ],
-  partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
 });
 
-// Petite aide log (envoie aussi dans LOG_CHANNEL_ID si présent)
+// ───────────────────────────────────────────────────────────────────────────────
+// 2) Utilitaires de log
 async function sendLog(msg) {
   console.log(msg);
   if (!LOG_CHANNEL_ID) return;
   try {
     const ch = await client.channels.fetch(LOG_CHANNEL_ID);
-    if (ch && ch.isTextBased()) await ch.send(String(msg).slice(0, 1900));
-  } catch (_e) {/* ignore */}
+    if (ch?.isTextBased()) await ch.send(String(msg).slice(0, 1900));
+  } catch (_) { /* ignore */ }
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
-// Chargement des commandes (src/commands/*.js)
-// Chaque commande doit exporter: `export const data = new SlashCommandBuilder(...); export async function execute(interaction) {}`
+// 3) Événements globaux (ajoute ici au fur et à mesure)
+//    ⚠️ On ne garde que ce qui existe déjà pour SBC (pas de brouillon)
+require('./events/welcome.js')(client);
+require('./events/qcmNoCmd')(client);
+
+// ───────────────────────────────────────────────────────────────────────────────
+// 4) Chargement des commandes slash (src/commands/*.js)
 client.commands = new Collection();
-
-async function loadCommands() {
-  const commandsPath = join(__dirname, 'commands');
-  if (!fs.existsSync(commandsPath)) return;
-
+const commandsPath  = path.join(__dirname, 'commands');
+if (fs.existsSync(commandsPath)) {
   const files = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
-  for (const f of files) {
-    try {
-      // utilise require() pour compat CommonJS/ESM via transpilation
-      const mod = require(join(commandsPath, f));
-      const data = mod?.data || mod?.default?.data;
-      const execute = mod?.execute || mod?.default?.execute;
-      if (data && execute) {
-        client.commands.set(data.name, { data, execute });
-      } else {
-        console.warn(`⚠️ Commande ignorée (structure invalide): ${f}`);
-      }
-    } catch (e) {
-      console.error(`❌ Erreur chargement commande ${f}:`, e?.message);
+  for (const file of files) {
+    const mod = require(path.join(commandsPath, file));
+    if (mod?.data && mod?.execute) {
+      client.commands.set(mod.data.name, mod);
+    } else {
+      console.warn(`⚠️ Commande ignorée (structure invalide): ${file}`);
     }
   }
-  await sendLog(`🧩 ${client.commands.size} commande(s) chargée(s).`);
+  console.log(`🧩 ${client.commands.size} commande(s) chargée(s).`);
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
-// Chargement des événements (src/events/*.js)
-// Deux formats possibles:
-//  A) Event ESM: export const name='ready'; export const once=true|false; export async function execute(...args) {}
-//  B) Event CJS: module.exports = (client) => { /* s’abonne directement */ }
-async function loadEvents() {
-  const eventsPath = join(__dirname, 'events');
-  if (!fs.existsSync(eventsPath)) return;
-
-  const files = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
-  for (const f of files) {
-    const full = join(eventsPath, f);
-    try {
-      const ev = require(full);
-      // Format B: fonction (client) => {...}
-      if (typeof ev === 'function') {
-        ev(client);
-        continue;
-      }
-      // Format A: { name, once, execute }
-      if (ev?.name && typeof ev.execute === 'function') {
-        if (ev.once) client.once(ev.name, (...args) => ev.execute(...args, client));
-        else client.on(ev.name, (...args) => ev.execute(...args, client));
-      } else if (ev?.default && ev.default.name && typeof ev.default.execute === 'function') {
-        const e = ev.default;
-        if (e.once) client.once(e.name, (...args) => e.execute(...args, client));
-        else client.on(e.name, (...args) => e.execute(...args, client));
-      } else {
-        console.warn(`⚠️ Événement ignoré (structure invalide): ${f}`);
-      }
-    } catch (e) {
-      console.error(`❌ Erreur chargement event ${f}:`, e?.message);
-    }
-  }
-}
-
-// ───────────────────────────────────────────────────────────────────────────────
-// Événements de base
+// 5) Démarrage / état du bot
 client.once(Events.ClientReady, async () => {
   await sendLog(`✅ Connecté en tant que ${client.user.tag} • Guild: ${GUILD_ID || 'N/A'}`);
-});
 
-client.on(Events.Error, (e) => console.error('💥 Client error:', e));
-client.on(Events.ShardError, (e) => console.error('🔻 Shard error:', e));
-process.on('unhandledRejection', (r) => console.error('🚨 UnhandledRejection:', r));
-process.on('uncaughtException', (e) => console.error('🔥 UncaughtException:', e));
-
-// Router des slash-commands
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  const cmd = client.commands.get(interaction.commandName);
-  if (!cmd) {
-    return interaction.reply({ content: '❓ Commande inconnue.', ephemeral: true }).catch(() => {});
-  }
+  // Optionnel : dossier persistant
   try {
-    await cmd.execute(interaction, client);
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   } catch (e) {
-    console.error(`❌ Erreur exécution /${interaction.commandName}:`, e?.message);
-    if (interaction.deferred || interaction.replied) {
-      await interaction.followUp({ content: '❗ Une erreur est survenue.', ephemeral: true }).catch(() => {});
-    } else {
-      await interaction.reply({ content: '❗ Une erreur est survenue.', ephemeral: true }).catch(() => {});
-    }
+    console.warn('⚠️ Impossible de créer DATA_DIR :', DATA_DIR, e?.message);
   }
 });
 
 // ───────────────────────────────────────────────────────────────────────────────
-// Bootstrap
-(async () => {
-  await loadCommands();
-  await loadEvents();
-  await client.login(BOT_TOKEN);
-})();
+// 6) Router des interactions
+client.on(Events.InteractionCreate, async (interaction) => {
+  // Slash-commands
+  if (interaction.isChatInputCommand()) {
+    const cmd = client.commands.get(interaction.commandName);
+    if (!cmd) {
+      return interaction.reply({ content: '❓ Commande inconnue.', ephemeral: true }).catch(() => {});
+    }
+    try {
+      await cmd.execute(interaction, client);
+    } catch (e) {
+      console.error(`❌ Erreur exécution /${interaction.commandName}:`, e?.message);
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp({ content: '❗ Une erreur est survenue.', ephemeral: true }).catch(() => {});
+      } else {
+        await interaction.reply({ content: '❗ Une erreur est survenue.', ephemeral: true }).catch(() => {});
+      }
+    }
+    return;
+  }
 
-// Fermeture propre (utile sur Render)
+  // (ajoute ici d’autres routers quand tu crées des modules)
+});
+
+// ───────────────────────────────────────────────────────────────────────────────
+// 7) Lancement
+client.login(BOT_TOKEN)
+  .then(() => console.log('🚀 Bot en cours de connexion…'))
+  .catch((e) => { console.error('❌ Login raté :', e?.message); process.exit(1); });
+
+// ───────────────────────────────────────────────────────────────────────────────
+// 8) Arrêt propre (utile Render/hosting)
 const shutdown = async (code = 0) => {
   try {
     await sendLog('🛑 Arrêt du bot…');
@@ -181,3 +118,5 @@ const shutdown = async (code = 0) => {
 };
 process.on('SIGINT',  () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
+process.on('unhandledRejection', (r) => console.error('🚨 UnhandledRejection:', r));
+process.on('uncaughtException', (e) => console.error('🔥 UncaughtException:', e));
