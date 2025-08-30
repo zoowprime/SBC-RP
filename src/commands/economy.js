@@ -1,7 +1,6 @@
 // src/commands/economy.js
 const {
   SlashCommandBuilder,
-  PermissionFlagsBits,
   EmbedBuilder,
 } = require('discord.js');
 
@@ -23,10 +22,6 @@ const ACCOUNTS = [
   { name: 'courant',    value: 'courant' },
   { name: 'entreprise', value: 'entreprise' },
 ];
-const FIELDS = [
-  { name: 'banque',  value: 'banque' },
-  { name: 'liquide', value: 'liquide' },
-];
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -42,21 +37,33 @@ module.exports = {
     .addSubcommand(sc =>
       sc.setName('payer')
         .setDescription('Payer un joueur.')
-        .addStringOption(o => o.setName('source').setDescription('Compte source').addChoices(...ACCOUNTS).setRequired(true))
-        .addStringOption(o => o.setName('vers').setDescription('Compte destinataire').addChoices(...ACCOUNTS).setRequired(true))
+        .addStringOption(o => o.setName('source').setDescription('Compte source').addChoices(
+          { name: 'courant', value: 'courant' },
+          { name: 'entreprise', value: 'entreprise' },
+        ).setRequired(true))
+        .addStringOption(o => o.setName('vers').setDescription('Compte destinataire').addChoices(
+          { name: 'courant', value: 'courant' },
+          { name: 'entreprise', value: 'entreprise' },
+        ).setRequired(true))
         .addUserOption(o => o.setName('target').setDescription('Destinataire').setRequired(true))
         .addIntegerOption(o => o.setName('montant').setDescription('Montant à payer').setMinValue(1).setRequired(true))
     )
     .addSubcommand(sc =>
       sc.setName('retirer-argent')
         .setDescription('Retirer de la banque vers le liquide.')
-        .addStringOption(o => o.setName('compte').setDescription('Compte à débiter').addChoices(...ACCOUNTS).setRequired(true))
+        .addStringOption(o => o.setName('compte').setDescription('Compte à débiter').addChoices(
+          { name: 'courant', value: 'courant' },
+          { name: 'entreprise', value: 'entreprise' },
+        ).setRequired(true))
         .addIntegerOption(o => o.setName('montant').setDescription('Montant à retirer').setMinValue(1).setRequired(true))
     )
     .addSubcommand(sc =>
       sc.setName('deposer-argent')
         .setDescription('Déposer du liquide vers la banque.')
-        .addStringOption(o => o.setName('compte').setDescription('Compte à créditer').addChoices(...ACCOUNTS).setRequired(true))
+        .addStringOption(o => o.setName('compte').setDescription('Compte à créditer').addChoices(
+          { name: 'courant', value: 'courant' },
+          { name: 'entreprise', value: 'entreprise' },
+        ).setRequired(true))
         .addIntegerOption(o => o.setName('montant').setDescription('Montant à déposer').setMinValue(1).setRequired(true))
     )
     .addSubcommand(sc =>
@@ -75,12 +82,15 @@ module.exports = {
     .addSubcommand(sc =>
       sc.setName('supprimer-argent')
         .setDescription('STAFF: remet à 0 un compte (courant OU entreprise).')
-        .addStringOption(o => o.setName('compte').setDescription('Compte à reset').addChoices(...ACCOUNTS).setRequired(true))
+        .addStringOption(o => o.setName('compte').setDescription('Compte à reset').addChoices(
+          { name: 'courant', value: 'courant' },
+          { name: 'entreprise', value: 'entreprise' },
+        ).setRequired(true))
         .addUserOption(o => o.setName('target').setDescription('Joueur').setRequired(true))
     )
     .addSubcommand(sc =>
       sc.setName('giveargent')
-        .setDescription('STAFF: donne de l’argent dans un champ de banque.')
+        .setDescription('STAFF: donne de l’argent sur courant.banque ou entreprise.banque.')
         .addStringOption(o => o.setName('champ').setDescription('courant.banque ou entreprise.banque').addChoices(
           { name: 'courant.banque', value: 'courant.banque' },
           { name: 'entreprise.banque', value: 'entreprise.banque' },
@@ -104,7 +114,10 @@ module.exports = {
       sc.setName('recuperer-argent')
         .setDescription('BANQUIER/STAFF: saisit un montant sur un compte (puise banque+liquide).')
         .addUserOption(o => o.setName('target').setDescription('Joueur').setRequired(true))
-        .addStringOption(o => o.setName('compte').setDescription('Compte cible').addChoices(...ACCOUNTS).setRequired(true))
+        .addStringOption(o => o.setName('compte').setDescription('Compte cible').addChoices(
+          { name: 'courant', value: 'courant' },
+          { name: 'entreprise', value: 'entreprise' },
+        ).setRequired(true))
         .addIntegerOption(o => o.setName('montant').setDescription('Montant à saisir').setMinValue(1).setRequired(true))
     )
     .setDMPermission(false),
@@ -114,15 +127,14 @@ module.exports = {
     const guildId = interaction.guildId;
     const meId    = interaction.user.id;
 
-    // Helpers d’autorisations
     const requireStaff = () => {
       if (interaction.member?.roles?.cache?.has(STAFF_ROLE_ID)) return true;
-      interaction.reply({ content: '❌ Réservé au staff.', ephemeral: true }).catch(() => {});
+      interaction.reply({ content: '❌ Réservé au staff.' }).catch(() => {});
       return false;
     };
     const requireBankerOrStaff = () => {
       if (isBankerOrStaff(interaction)) return true;
-      interaction.reply({ content: '❌ Réservé aux banquiers/staff.', ephemeral: true }).catch(() => {});
+      interaction.reply({ content: '❌ Réservé aux banquiers/staff.' }).catch(() => {});
       return false;
     };
 
@@ -133,57 +145,43 @@ module.exports = {
 
       const embedData = buildAccountEmbed({ user: target.id, tag: target.tag, data });
       const embed = new EmbedBuilder(embedData);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'payer') {
-      const sourceChoice = interaction.options.getString('source'); // courant | entreprise
-      const destChoice   = interaction.options.getString('vers');   // courant | entreprise
+      const sourceChoice = interaction.options.getString('source');
+      const destChoice   = interaction.options.getString('vers');
       const target       = interaction.options.getUser('target');
       const amount       = interaction.options.getInteger('montant');
 
-      if (amount <= 0) return interaction.reply({ content: '❌ Montant invalide.', ephemeral: true });
+      if (amount <= 0) return interaction.reply({ content: '❌ Montant invalide.' });
 
-      if (target.id === meId) return interaction.reply({ content: '❌ Impossible de vous payer vous-même.', ephemeral: true });
+      if (target.id === meId) return interaction.reply({ content: '❌ Impossible de vous payer vous-même.' });
 
       const srcKey  = accountKeyFromChoice(sourceChoice);
       const dstKey  = accountKeyFromChoice(destChoice);
 
-      // Charger données des deux
       let meData    = getUser(guildId, meId);
       const youData = getUser(guildId, target.id);
 
-      // Règles de gel :
-      // - Si je suis gelé: je ne peux payer QUE depuis "courant" liquide (aucun accès banque ni entreprise).
-      if (meData.frozen) {
-        if (srcKey !== 'current') {
-          return interaction.reply({ content: '🧊 Compte gelé : vous ne pouvez payer que depuis le **liquide du compte courant**.', ephemeral: true });
-        }
+      if (meData.frozen && srcKey !== 'current') {
+        return interaction.reply({ content: '🧊 Compte gelé : vous ne pouvez payer que depuis le **liquide du compte courant**.' });
       }
 
-      // Débit côté émetteur
       const debitOpts = meData.frozen
-        ? { bankFirst: true, liquidOnly: true }   // gelé → uniquement liquide courant
-        : { bankFirst: true, liquidOnly: false }; // normal → banque puis liquide
-
-      const result = setUser(guildId, meId, (u) => {
-        meData = u; // mut
-      });
+        ? { bankFirst: true, liquidOnly: true }
+        : { bankFirst: true, liquidOnly: false };
 
       const resDeb = debit(meData, srcKey, amount, debitOpts);
-      if (!resDeb.ok) {
-        return interaction.reply({ content: `❌ Fonds insuffisants pour payer **${fmt(amount)}**.`, ephemeral: true });
-      }
-      // Crédit côté destinataire → en **banque** du compte choisi
+      if (!resDeb.ok) return interaction.reply({ content: `❌ Fonds insuffisants pour payer **${fmt(amount)}**.` });
+
       credit(youData, dstKey, 'bank', amount);
 
-      // Sauvegarder destination
       setUser(guildId, target.id, (u) => {
         u.frozen  = youData.frozen;
         u.current = youData.current;
         u.business= youData.business;
       });
-      // Sauvegarder source (déjà muté) :
       setUser(guildId, meId, (u) => {
         u.frozen  = meData.frozen;
         u.current = meData.current;
@@ -201,32 +199,25 @@ module.exports = {
           { name: 'Pris en banque', value: `🏦 ${fmt(resDeb.takenBank)}`, inline: true },
           { name: 'Pris en liquide', value: `💵 ${fmt(resDeb.takenLiquid)}`, inline: true },
         );
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'retirer-argent') {
-      const comp   = interaction.options.getString('compte'); // courant | entreprise
+      const comp   = interaction.options.getString('compte');
       const amount = interaction.options.getInteger('montant');
-      if (amount <= 0) return interaction.reply({ content: '❌ Montant invalide.', ephemeral: true });
+      if (amount <= 0) return interaction.reply({ content: '❌ Montant invalide.' });
 
       let meData = getUser(guildId, meId);
       if (meData.frozen) {
-        // gelé → pas de retrait banque
-        return interaction.reply({ content: '🧊 Compte gelé : vous ne pouvez **pas** retirer depuis la banque.', ephemeral: true });
+        return interaction.reply({ content: '🧊 Compte gelé : vous ne pouvez **pas** retirer depuis la banque.' });
       }
 
       const key = accountKeyFromChoice(comp);
-      const res = setUser(guildId, meId, (u) => { meData = u; });
-
       const deb = debit(meData, key, amount, { bankFirst: true, liquidOnly: false });
-      if (!deb.ok) {
-        return interaction.reply({ content: '❌ Fonds insuffisants en banque.', ephemeral: true });
-      }
-      // tout ce qui a été pris (banque puis liquide) est censé venir de banque ; mais on veut "banque → liquide",
-      // donc on re-crédite tout en liquide :
+      if (!deb.ok) return interaction.reply({ content: '❌ Fonds insuffisants en banque.' });
+
       meData[key].liquid += (deb.takenBank + deb.takenLiquid);
 
-      // save
       setUser(guildId, meId, (u) => {
         u.frozen  = meData.frozen;
         u.current = meData.current;
@@ -239,30 +230,25 @@ module.exports = {
         .setColor(VIOLET)
         .setTitle('🏧 Retrait effectué')
         .setDescription(`Transféré **${fmt(amount)}** de 🏦 banque → 💵 liquide (${comp}).`);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'deposer-argent') {
       const comp   = interaction.options.getString('compte');
       const amount = interaction.options.getInteger('montant');
-      if (amount <= 0) return interaction.reply({ content: '❌ Montant invalide.', ephemeral: true });
+      if (amount <= 0) return interaction.reply({ content: '❌ Montant invalide.' });
 
       let meData = getUser(guildId, meId);
       if (meData.frozen) {
-        // gelé → pas de dépôt banque
-        return interaction.reply({ content: '🧊 Compte gelé : vous ne pouvez **pas** déposer en banque.', ephemeral: true });
+        return interaction.reply({ content: '🧊 Compte gelé : vous ne pouvez **pas** déposer en banque.' });
       }
 
       const key = accountKeyFromChoice(comp);
-
-      // débiter depuis liquide UNIQUEMENT
-      const res = setUser(guildId, meId, (u) => { meData = u; });
       const deb = debit(meData, key, amount, { bankFirst: false, liquidOnly: true });
-      if (!deb.ok) return interaction.reply({ content: '❌ Pas assez de liquide.', ephemeral: true });
+      if (!deb.ok) return interaction.reply({ content: '❌ Pas assez de liquide.' });
 
       meData[key].bank += amount;
 
-      // save
       setUser(guildId, meId, (u) => {
         u.frozen  = meData.frozen;
         u.current = meData.current;
@@ -275,18 +261,17 @@ module.exports = {
         .setColor(VIOLET)
         .setTitle('🏦 Dépôt effectué')
         .setDescription(`Transféré **${fmt(amount)}** de 💵 liquide → 🏦 banque (${comp}).`);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'voler-argent') {
       const target = interaction.options.getUser('target');
-      if (target.id === meId) return interaction.reply({ content: '❌ Tu ne peux pas te voler toi-même.', ephemeral: true });
+      if (target.id === meId) return interaction.reply({ content: '❌ Tu ne peux pas te voler toi-même.' });
 
       const victim = getUser(guildId, target.id);
       const loot = Math.floor(victim.current.liquid / 2);
-      if (loot <= 0) return interaction.reply({ content: '😶 La cible n’a rien à voler en liquide…', ephemeral: true });
+      if (loot <= 0) return interaction.reply({ content: '😶 La cible n’a rien à voler en liquide…' });
 
-      // transfert liquide courant → courant
       setUser(guildId, target.id, (u) => { u.current.liquid -= loot; });
       setUser(guildId, meId,     (u) => { u.current.liquid += loot;  });
 
@@ -296,7 +281,7 @@ module.exports = {
         .setColor(VIOLET)
         .setTitle('🕵️ Vol réussi')
         .setDescription(`Tu as volé **${fmt(loot)}** à **${target.tag}** (💵 courant).`);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'calculer-taxe') {
@@ -314,7 +299,7 @@ module.exports = {
           { name: 'Taxe',         value: `**${fmt(taxe)}**`, inline: true },
           { name: 'Net',          value: `**${fmt(net)}**`, inline: true },
         );
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ───────────────────────────────────────────────────────────────────────────
@@ -336,7 +321,7 @@ module.exports = {
         .setColor(VIOLET)
         .setTitle('🧹 Compte remis à zéro')
         .setDescription(`Le compte **${comp}** de **${target.tag}** a été vidé (banque & liquide).`);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'giveargent') {
@@ -350,13 +335,10 @@ module.exports = {
       const field = fieldFromChoice(fieldChoice);
 
       if (field !== 'bank') {
-        // sécurité : on limite au champ banque comme demandé
-        return interaction.reply({ content: '❌ Cette commande crédite uniquement la **banque**.', ephemeral: true });
+        return interaction.reply({ content: '❌ Cette commande crédite uniquement la **banque**.' });
       }
 
-      setUser(guildId, target.id, (u) => {
-        u[key][field] += amount;
-      });
+      setUser(guildId, target.id, (u) => { u[key][field] += amount; });
 
       await logEconomy(client, `➕ **GIVE** ${fmt(amount)} sur ${champ} de ${target.tag} (par ${interaction.user.tag}).`);
 
@@ -364,7 +346,7 @@ module.exports = {
         .setColor(VIOLET)
         .setTitle('➕ Crédit effectué')
         .setDescription(`Ajouté **${fmt(amount)}** sur **${champ}** de **${target.tag}**.`);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ───────────────────────────────────────────────────────────────────────────
@@ -381,7 +363,7 @@ module.exports = {
         .setColor(VIOLET)
         .setTitle('🧊 Comptes gelés')
         .setDescription(`Les comptes de **${target.tag}** sont gelés.\nSeul le **liquide du compte courant** reste utilisable.`);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'degeler-compte') {
@@ -396,7 +378,7 @@ module.exports = {
         .setColor(VIOLET)
         .setTitle('🔥 Comptes dégélés')
         .setDescription(`Les comptes de **${target.tag}** sont de nouveau actifs.`);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     if (sub === 'recuperer-argent') {
@@ -408,15 +390,11 @@ module.exports = {
       const key = accountKeyFromChoice(comp);
       let tData = getUser(guildId, target.id);
 
-      // on saisit via banque puis liquide (puise sur les deux)
       const resDeb = debit(tData, key, amount, { bankFirst: true, liquidOnly: false });
       if (!resDeb.ok) {
-        // on prend tout ce qu'il a (saisie totale) si inférieur ?
-        // Spécification: "ça saisit le montant tant que le total a la somme saisie" → si insuffisant, on refuse.
-        return interaction.reply({ content: '❌ Fonds insuffisants sur ce compte pour saisir ce montant.', ephemeral: true });
+        return interaction.reply({ content: '❌ Fonds insuffisants sur ce compte pour saisir ce montant.' });
       }
 
-      // save
       setUser(guildId, target.id, (u) => {
         u.frozen  = tData.frozen;
         u.current = tData.current;
@@ -429,7 +407,7 @@ module.exports = {
         .setColor(VIOLET)
         .setTitle('⚖️ Saisie effectuée')
         .setDescription(`Prélevé **${fmt(amount)}** sur **${comp}** de **${target.tag}** (🏦 ${fmt(resDeb.takenBank)} + 💵 ${fmt(resDeb.takenLiquid)}).`);
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
   },
 };
