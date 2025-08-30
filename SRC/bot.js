@@ -22,7 +22,7 @@ const {
   BOT_TOKEN,                    // (Render uniquement)
   CLIENT_ID,
   GUILD_ID,
-  DATA_DIR = './data',
+  DATA_DIR = '/data',
   LOG_CHANNEL_ID,               // optionnel
 } = process.env;
 
