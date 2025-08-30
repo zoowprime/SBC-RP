@@ -31,7 +31,7 @@ module.exports = {
 
   async execute(interaction) {
     const STAFF_ROLE_ID    = process.env.STAFF_ROLE_ID;
-    const ORAL_A_FAIRE     = process.env.QCM_A_FAIRE_ROLE_ID;
+    const QCM_A_FAIRE_ROLE_ID     = process.env.QCM_A_FAIRE_ROLE_ID;
     const WELCOME_ROLE_ID  = process.env.WELCOME_ROLE_ID;
 
     // Vérification permission staff
