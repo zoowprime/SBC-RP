@@ -1,4 +1,4 @@
-// src/bot.js
+// src/bot.js (ESM mix) — charge id.env (SBC), utilise require() pour events/commands, et garde l’arbo pour étendre
 import dotenv from 'dotenv';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -10,6 +10,8 @@ import {
   Partials,
   Events,
 } from 'discord.js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
 // ───────────────────────────────────────────────────────────────────────────────
 // Résolution de chemin ESM (équivalent __dirname)
@@ -79,9 +81,12 @@ async function loadCommands() {
   const files = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
   for (const f of files) {
     try {
-      const mod = await import(join(commandsPath, f));
-      if (mod?.data && mod?.execute) {
-        client.commands.set(mod.data.name, mod);
+      // utilise require() pour compat CommonJS/ESM via transpilation
+      const mod = require(join(commandsPath, f));
+      const data = mod?.data || mod?.default?.data;
+      const execute = mod?.execute || mod?.default?.execute;
+      if (data && execute) {
+        client.commands.set(data.name, { data, execute });
       } else {
         console.warn(`⚠️ Commande ignorée (structure invalide): ${f}`);
       }
@@ -94,21 +99,34 @@ async function loadCommands() {
 
 // ───────────────────────────────────────────────────────────────────────────────
 // Chargement des événements (src/events/*.js)
-// Chaque event doit exporter: `export const name='ready'; export const once=true|false; export async function execute(...args) {}`
+// Deux formats possibles:
+//  A) Event ESM: export const name='ready'; export const once=true|false; export async function execute(...args) {}
+//  B) Event CJS: module.exports = (client) => { /* s’abonne directement */ }
 async function loadEvents() {
   const eventsPath = join(__dirname, 'events');
   if (!fs.existsSync(eventsPath)) return;
 
   const files = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
   for (const f of files) {
+    const full = join(eventsPath, f);
     try {
-      const ev = await import(join(eventsPath, f));
-      if (!ev?.name || !ev?.execute) {
-        console.warn(`⚠️ Événement ignoré (structure invalide): ${f}`);
+      const ev = require(full);
+      // Format B: fonction (client) => {...}
+      if (typeof ev === 'function') {
+        ev(client);
         continue;
       }
-      if (ev.once) client.once(ev.name, (...args) => ev.execute(...args, client));
-      else client.on(ev.name, (...args) => ev.execute(...args, client));
+      // Format A: { name, once, execute }
+      if (ev?.name && typeof ev.execute === 'function') {
+        if (ev.once) client.once(ev.name, (...args) => ev.execute(...args, client));
+        else client.on(ev.name, (...args) => ev.execute(...args, client));
+      } else if (ev?.default && ev.default.name && typeof ev.default.execute === 'function') {
+        const e = ev.default;
+        if (e.once) client.once(e.name, (...args) => e.execute(...args, client));
+        else client.on(e.name, (...args) => e.execute(...args, client));
+      } else {
+        console.warn(`⚠️ Événement ignoré (structure invalide): ${f}`);
+      }
     } catch (e) {
       console.error(`❌ Erreur chargement event ${f}:`, e?.message);
     }
