@@ -9,6 +9,7 @@ const sequencePath = path.join(dataDir, 'sequence.json');
 const vitrinePath = path.join(dataDir, 'vitrine.json');
 
 function ensureFiles() {
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   if (!fs.existsSync(vehiclesPath)) fs.writeFileSync(vehiclesPath, JSON.stringify([], null, 2));
   if (!fs.existsSync(alertsPath)) fs.writeFileSync(alertsPath, JSON.stringify([], null, 2));
   if (!fs.existsSync(sequencePath)) fs.writeFileSync(sequencePath, JSON.stringify({ vehicle: 0 }, null, 2));
