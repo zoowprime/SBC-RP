@@ -1,11 +1,10 @@
-// src/commands/id.js
 const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
 require('dotenv').config({ path: './id.env' });
 const fs = require('fs');
 const path = require('path');
 
 const { renderIdCard } = require('../idcard/renderer');
-const { getCard, setCard, nextIdNumber, sanitize, DIR } = require('../idcard/service');
+const { getCard, setCard, deleteCard, nextIdNumber, sanitize, DIR } = require('../idcard/service');
 
 const { STAFF_ROLE_ID, POLICE_ROLE_ID } = process.env;
 const TEMPLATE_PATH = path.resolve('src/idcard/template.json');
@@ -19,7 +18,6 @@ module.exports = {
     .setName('id')
     .setDescription('Gestion des cartes d’identité RP (image).')
 
-    // ─────────────────────────────── /id delivrer
     .addSubcommand(sc =>
       sc.setName('delivrer')
         .setDescription('SAPD/Staff : créer ou mettre à jour la carte d’un joueur.')
@@ -29,62 +27,62 @@ module.exports = {
         .addStringOption(o => o.setName('naissance').setDescription('Date de naissance (JJ/MM/AAAA)').setRequired(true))
         .addStringOption(o => o.setName('lieu').setDescription('Lieu de naissance').setRequired(true))
         .addStringOption(o => o.setName('taille').setDescription('Taille, ex: 182 cm').setRequired(true))
-        .addStringOption(o => o.setName('adresse').setDescription('Adresse RP').setRequired(false))
-        .addStringOption(o => o.setName('signature').setDescription('Signature').setRequired(false))
-        .addAttachmentOption(o => o.setName('photo').setDescription('Photo visage (image)').setRequired(false))
+        .addStringOption(o => o.setName('adresse').setDescription('Adresse RP'))
+        .addStringOption(o => o.setName('signature').setDescription('Signature'))
+        .addAttachmentOption(o => o.setName('photo').setDescription('Photo visage (image)'))
     )
 
-    // ─────────────────────────────── /id afficher
     .addSubcommand(sc =>
       sc.setName('afficher')
         .setDescription('Afficher la carte (image).')
-        .addUserOption(o => o.setName('target').setDescription('Joueur').setRequired(false))
+        .addUserOption(o => o.setName('target').setDescription('Joueur'))
     )
 
-    // ─────────────────────────────── /id set-photo (⚠️ required d’abord)
     .addSubcommand(sc =>
       sc.setName('set-photo')
         .setDescription('Changer la photo (proprio ou Staff/SAPD).')
-        .addAttachmentOption(o => o.setName('photo').setDescription('Image').setRequired(true)) // REQUIRED en premier
-        .addUserOption(o => o.setName('target').setDescription('Joueur (si staff)').setRequired(false))
+        .addAttachmentOption(o => o.setName('photo').setDescription('Image').setRequired(true)) // required en premier
+        .addUserOption(o => o.setName('target').setDescription('Joueur (si staff)'))
     )
 
-    // ─────────────────────────────── /id maj
     .addSubcommand(sc =>
       sc.setName('maj')
         .setDescription('Mettre à jour adresse/signature.')
-        .addStringOption(o => o.setName('adresse').setDescription('Adresse RP').setRequired(false))
-        .addStringOption(o => o.setName('signature').setDescription('Signature').setRequired(false))
+        .addStringOption(o => o.setName('adresse').setDescription('Adresse RP'))
+        .addStringOption(o => o.setName('signature').setDescription('Signature'))
     )
 
-    // ─────────────────────────────── /id retirer
     .addSubcommand(sc =>
       sc.setName('retirer')
         .setDescription('SAPD/Staff : suspendre la carte.')
         .addUserOption(o => o.setName('target').setDescription('Joueur').setRequired(true))
     )
 
-    // ─────────────────────────────── /id restaurer
     .addSubcommand(sc =>
       sc.setName('restaurer')
         .setDescription('SAPD/Staff : restaurer la carte.')
         .addUserOption(o => o.setName('target').setDescription('Joueur').setRequired(true))
     )
+
+    .addSubcommand(sc =>
+      sc.setName('supprimer')
+        .setDescription('SAPD/Staff : supprimer définitivement la carte d’un joueur.')
+        .addUserOption(o => o.setName('target').setDescription('Joueur').setRequired(true))
+    )
+
     .setDMPermission(false),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
     const guildId = interaction.guildId;
 
-    // sécu: s’assure que le répertoire d’export existe (sinon writeFileSync plantera)
     const cardsDir = path.join(DIR, 'cards');
     try { fs.mkdirSync(cardsDir, { recursive: true }); } catch {}
 
-    // ─────────────────────────────── /id delivrer
+    // /id delivrer
     if (sub === 'delivrer') {
-      if (!isPoliceOrStaff(interaction.member)) {
-        return interaction.reply({ content: '❌ Réservé SAPD/Staff.' });
-      }
+      if (!isPoliceOrStaff(interaction.member)) return interaction.reply({ content: '❌ Réservé SAPD/Staff.' });
+
       const target = interaction.options.getUser('target', true);
       const nom    = sanitize(interaction.options.getString('nom', true)).toUpperCase();
       const prenom = sanitize(interaction.options.getString('prenom', true));
@@ -120,7 +118,7 @@ module.exports = {
       return interaction.reply({ content: `🪪 Carte d’identité de ${target}`, files: [file], allowedMentions: { parse: [] } });
     }
 
-    // ─────────────────────────────── /id afficher
+    // /id afficher
     if (sub === 'afficher') {
       const target = interaction.options.getUser('target') || interaction.user;
       const card = getCard(guildId, target.id);
@@ -138,7 +136,7 @@ module.exports = {
       return interaction.reply({ content: `🪪 Carte d’identité de ${target}`, files: [file], allowedMentions: { parse: [] } });
     }
 
-    // ─────────────────────────────── /id set-photo
+    // /id set-photo
     if (sub === 'set-photo') {
       const att = interaction.options.getAttachment('photo', true);
       const chosen = interaction.options.getUser('target') || interaction.user;
@@ -147,7 +145,6 @@ module.exports = {
       if (!isOwner && !isPoliceOrStaff(interaction.member)) {
         return interaction.reply({ content: '❌ Tu ne peux changer que **ta** photo.' });
       }
-
       const existing = getCard(guildId, chosen.id);
       if (!existing) return interaction.reply({ content: `❌ Aucune carte pour ${chosen}.` });
 
@@ -165,7 +162,7 @@ module.exports = {
       return interaction.reply({ content: `🖼️ Photo mise à jour pour ${chosen}`, files: [file], allowedMentions: { parse: [] } });
     }
 
-    // ─────────────────────────────── /id maj
+    // /id maj
     if (sub === 'maj') {
       const card = getCard(guildId, interaction.user.id);
       if (!card) return interaction.reply({ content: '❌ Aucune carte à mettre à jour.' });
@@ -190,11 +187,10 @@ module.exports = {
       return interaction.reply({ content: '✅ Mis à jour.', files: [file] });
     }
 
-    // ─────────────────────────────── /id retirer & /id restaurer
+    // /id retirer & /id restaurer
     if (sub === 'retirer' || sub === 'restaurer') {
-      if (!isPoliceOrStaff(interaction.member)) {
-        return interaction.reply({ content: '❌ Réservé SAPD/Staff.' });
-      }
+      if (!isPoliceOrStaff(interaction.member)) return interaction.reply({ content: '❌ Réservé SAPD/Staff.' });
+
       const target = interaction.options.getUser('target', true);
       const exists = getCard(guildId, target.id);
       if (!exists) return interaction.reply({ content: `❌ Aucune carte pour ${target}.` });
@@ -211,6 +207,23 @@ module.exports = {
       const files = buf ? [new AttachmentBuilder(buf, { name: `ID_${target.username}.png` })] : [];
       const verb = (sub === 'retirer') ? 'suspendue' : 'restaurée';
       return interaction.reply({ content: `⚖️ Carte ${verb} pour ${target}.`, files });
+    }
+
+    // /id supprimer
+    if (sub === 'supprimer') {
+      if (!isPoliceOrStaff(interaction.member)) return interaction.reply({ content: '❌ Réservé SAPD/Staff.' });
+
+      const target = interaction.options.getUser('target', true);
+      const exists = getCard(guildId, target.id);
+      if (!exists) return interaction.reply({ content: `❌ Aucune carte pour ${target}.` });
+
+      const ok = deleteCard(guildId, target.id);
+      try {
+        const f = path.join(cardsDir, `${guildId}_${target.id}.png`);
+        if (fs.existsSync(f)) fs.unlinkSync(f);
+      } catch {}
+
+      return interaction.reply({ content: ok ? `🗑️ Carte supprimée pour ${target}.` : `❗ Échec suppression pour ${target}.` });
     }
   }
 };
