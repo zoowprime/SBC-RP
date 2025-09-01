@@ -9,21 +9,20 @@
     "script":  { "name": "GreatVibes-Regular", "file": "src/assets/fonts/GreatVibes-Regular.ttf" }
   },
 
-  "photoSlot": { "x": 865, "y": 150, "w": 260, "h": 330, "cornerRadius": 24, "fit": "cover-center" },
+  "photoSlot": { "x": 835, "y": 118, "w": 300, "h": 380, "cornerRadius": 28, "fit": "cover-center" },
 
   "fields": [
-    { "key": "rpName",   "x": 80,  "y": 210, "maxW": 700, "font": "primary", "size": 46, "color": "#111111", "align": "left" },
-    { "key": "dob",      "x": 80,  "y": 270, "maxW": 360, "font": "mono",    "size": 30, "color": "#222222", "align": "left" },
-    { "key": "pob",      "x": 450, "y": 270, "maxW": 330, "font": "mono",    "size": 30, "color": "#222222", "align": "left" },
-    { "key": "height",   "x": 80,  "y": 330, "maxW": 220, "font": "mono",    "size": 30, "color": "#222222", "align": "left" },
-    { "key": "address",  "x": 80,  "y": 390, "maxW": 700, "font": "mono",    "size": 28, "color": "#333333", "align": "left" },
-    { "key": "idNumber", "x": 80,  "y": 460, "maxW": 430, "font": "mono",    "size": 28, "color": "#444444", "align": "left" },
-    { "key": "signature","x": 290, "y": 615, "maxW": 430, "font": "script",  "size": 44, "color": "#111111", "align": "center" }
+    { "key": "rpName",   "x": 520, "y": 205, "maxW": 520, "font": "primary", "size": 46, "color": "#FFFFFF", "align": "left" },
+    { "key": "dob",      "x": 520, "y": 285, "maxW": 520, "font": "mono",    "size": 32, "color": "#FFFFFF", "align": "left" },
+    { "key": "pob",      "x": 520, "y": 365, "maxW": 520, "font": "mono",    "size": 32, "color": "#FFFFFF", "align": "left" },
+    { "key": "address",  "x": 520, "y": 445, "maxW": 520, "font": "mono",    "size": 30, "color": "#FFFFFF", "align": "left" },
+    { "key": "idNumber", "x": 520, "y": 525, "maxW": 520, "font": "mono",    "size": 30, "color": "#FFFFFF", "align": "left" },
+    { "key": "signature","x": 955, "y": 660, "maxW": 380, "font": "script",  "size": 46, "color": "#FFFFFF", "align": "center" }
   ],
 
   "badges": {
-    "valid":     { "text": "VALIDÉ",   "x": 920, "y": 520, "font": "primary", "size": 40, "color": "#2ecc71" },
-    "suspended": { "text": "SUSPENDU", "x": 860, "y": 520, "font": "primary", "size": 40, "color": "#e74c3c" }
+    "valid":     { "text": "VALIDÉ",   "x": 912, "y": 520, "font": "primary", "size": 42, "color": "#2ECC71" },
+    "suspended": { "text": "SUSPENDU", "x": 880, "y": 520, "font": "primary", "size": 42, "color": "#E74C3C" }
   },
 
   "qr": { "enabled": false, "x": 1040, "y": 620, "size": 110 }
