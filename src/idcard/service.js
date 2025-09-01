@@ -25,6 +25,13 @@ function setCard(gid, uid, updater) {
   if (!g.users[uid]) g.users[uid] = { status: 'valid' };
   updater(g.users[uid]); writeStore(s); return g.users[uid];
 }
+function deleteCard(gid, uid) {
+  const s = readStore(); const g = ensureGuild(s, gid);
+  if (!g.users[uid]) return false;
+  delete g.users[uid];
+  writeStore(s);
+  return true;
+}
 function nextIdNumber(gid) {
   const y = new Date().getFullYear();
   const rand = Math.floor(Math.random()*90000)+10000;
@@ -34,4 +41,4 @@ function sanitize(t='') {
   return String(t).slice(0, 120).replace(/@everyone/g,'@\u200beveryone').replace(/@here/g,'@\u200bhere');
 }
 
-module.exports = { getCard, setCard, nextIdNumber, sanitize, DIR };
+module.exports = { getCard, setCard, deleteCard, nextIdNumber, sanitize, DIR };
