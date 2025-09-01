@@ -1,0 +1,28 @@
+[
+  {
+    "id": "SBC-000001",
+    "marque": "Bravado",
+    "modele": "Buffalo STX",
+    "categorie": "sport",
+    "etat": "neuf",
+    "prix": 58000,
+    "stock": 3,
+    "couleurs": [
+      "Rouge",
+      "Noir"
+    ],
+    "perfs": {
+      "0_100": 5.0,
+      "vmax": 210,
+      "transmission": "RWD"
+    },
+    "images": [
+      "https://i.imgur.com/5QF3ZQ8.png"
+    ],
+    "vendeur_role": null,
+    "tags": [
+      "best-seller"
+    ],
+    "date_publication": "2025-09-01T12:00:00Z"
+  }
+]
