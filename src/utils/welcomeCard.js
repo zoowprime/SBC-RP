@@ -1,5 +1,5 @@
 // src/utils/welcomeCard.js (CommonJS)
-const { createCanvas, loadImage } = require('canvas');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
 
 async function generateCard({
