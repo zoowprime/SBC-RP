@@ -1,0 +1,30 @@
+{
+  "name": "SBC-ID-v1",
+  "size": { "width": 1200, "height": 750 },
+  "background": "src/assets/idcard_sbc_v1.png",
+
+  "fonts": {
+    "primary": { "name": "Montserrat-SemiBold", "file": "src/assets/fonts/Montserrat-SemiBold.ttf" },
+    "mono":    { "name": "JetBrainsMono-Medium", "file": "src/assets/fonts/JetBrainsMono-Medium.ttf" },
+    "script":  { "name": "GreatVibes-Regular", "file": "src/assets/fonts/GreatVibes-Regular.ttf" }
+  },
+
+  "photoSlot": { "x": 865, "y": 150, "w": 260, "h": 330, "cornerRadius": 24, "fit": "cover-center" },
+
+  "fields": [
+    { "key": "rpName",   "x": 80,  "y": 210, "maxW": 700, "font": "primary", "size": 46, "color": "#111111", "align": "left" },
+    { "key": "dob",      "x": 80,  "y": 270, "maxW": 360, "font": "mono",    "size": 30, "color": "#222222", "align": "left" },
+    { "key": "pob",      "x": 450, "y": 270, "maxW": 330, "font": "mono",    "size": 30, "color": "#222222", "align": "left" },
+    { "key": "height",   "x": 80,  "y": 330, "maxW": 220, "font": "mono",    "size": 30, "color": "#222222", "align": "left" },
+    { "key": "address",  "x": 80,  "y": 390, "maxW": 700, "font": "mono",    "size": 28, "color": "#333333", "align": "left" },
+    { "key": "idNumber", "x": 80,  "y": 460, "maxW": 430, "font": "mono",    "size": 28, "color": "#444444", "align": "left" },
+    { "key": "signature","x": 290, "y": 615, "maxW": 430, "font": "script",  "size": 44, "color": "#111111", "align": "center" }
+  ],
+
+  "badges": {
+    "valid":     { "text": "VALIDÉ",   "x": 920, "y": 520, "font": "primary", "size": 40, "color": "#2ecc71" },
+    "suspended": { "text": "SUSPENDU", "x": 860, "y": 520, "font": "primary", "size": 40, "color": "#e74c3c" }
+  },
+
+  "qr": { "enabled": false, "x": 1040, "y": 620, "size": 110 }
+}
