@@ -1,12 +1,18 @@
 // src/commands/propriete.js
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const path = require('path');
+const fs = require('fs');
+
 const {
   listListings, addListing, removeListing,
-  nextId, addOwned, findOwnedById, setOwned
+  nextId, addOwned, findOwnedById, setOwned, removeOwnedById
 } = require('../utils/properties');
 
+// 💸 économie
+const { getOrCreateAccount, updateAccount } = require('../economyData');
+
 const COLORS = {
-  primary: 0x5865F2,      // indigo discord
+  primary: 0x9B59B6,      // violet SBC
   success: 0x57F287,      // green
   warning: 0xFEE75C,      // yellow
   danger:  0xED4245,      // red
@@ -18,6 +24,16 @@ function isAgent(member) {
   const staffId = process.env.STAFF_ROLE_ID;
   if (!member) return false;
   return (roleId && member.roles.cache.has(roleId)) || (staffId && member.roles.cache.has(staffId));
+}
+
+// 💸 crédite l'agent sur entreprise.banque
+function creditAgentEnterprise(agentUserId, amount) {
+  if (!agentUserId || !amount || amount <= 0) return null;
+  const acc = getOrCreateAccount(agentUserId);
+  acc.entreprise = acc.entreprise || { banque: 0, liquide: 0 };
+  acc.entreprise.banque += amount;
+  updateAccount(agentUserId, acc);
+  return acc.entreprise.banque;
 }
 
 function buildListingEmbed(l) {
@@ -44,26 +60,21 @@ function buildOwnerDMEmbed({ property, mode }) {
   return new EmbedBuilder()
     .setColor(COLORS.success)
     .setTitle(`✅ ${mode === 'louer' ? 'Location' : 'Achat'} confirmé`)
-    .setDescription(
-      `Ta propriété est enregistrée.\n` +
-      `Utilise les commandes ci-dessous pour la gérer.`
-    )
+    .setDescription(`Ta propriété est enregistrée. Conserve bien l’ID.`)
     .addFields(
       { name: 'ID propriété', value: `\`${property.id}\``, inline: true },
       { name: 'Nom', value: property.name, inline: true },
       { name: 'Résumé', value: rentLine }
     )
-    .addFields(
-      {
-        name: 'Commandes utiles',
-        value:
-          `• \`/stockage ouvrir propriete_id:${property.id}\` — voir le stockage\n` +
-          `• \`/stockage depot propriete_id:${property.id}\` — déposer des items\n` +
-          `• \`/stockage retrait propriete_id:${property.id}\` — retirer des items\n` +
-          `• \`/propriete acces action:add propriete_id:${property.id}\` — gérer les accès\n` +
-          `• \`/propriete nommer propriete_id:${property.id}\` — renommer`,
-      }
-    )
+    .addFields({
+      name: 'Commandes utiles',
+      value:
+        `• \`/stockage ouvrir propriete_id:${property.id}\`\n` +
+        `• \`/stockage depot propriete_id:${property.id}\`\n` +
+        `• \`/stockage retrait propriete_id:${property.id}\`\n` +
+        `• \`/propriete acces action:add propriete_id:${property.id}\`\n` +
+        `• \`/propriete nommer propriete_id:${property.id}\``
+    })
     .setFooter({ text: 'SBC Immobilier — conserve bien cet ID !' })
     .setTimestamp();
 }
@@ -114,6 +125,13 @@ module.exports = {
         .addStringOption(o => o.setName('propriete_id').setDescription('ID').setRequired(true))
         .addUserOption   (o => o.setName('joueur').setDescription('Joueur (pour add/remove)'))
         .addStringOption (o => o.setName('droits').setDescription('voir,depôt,retrait'))
+    )
+
+    // 🆕 suppression d’une propriété (Agent/Staff)
+    .addSubcommand(sc =>
+      sc.setName('supprimer')
+        .setDescription('Supprimer définitivement une propriété (Agent/Staff).')
+        .addStringOption(o => o.setName('propriete_id').setDescription('ID').setRequired(true))
     ),
 
   async execute(interaction) {
@@ -131,34 +149,38 @@ module.exports = {
       return interaction.reply({ embeds });
     }
 
-    // ───── PUBLIER (PRIVÉ AGENT) ─────
+    // ───── PUBLIER (AGENT/STAFF) ─────
     if (sub === 'publier') {
       if (!isAgent(interaction.member)) {
-        return interaction.reply({ ephemeral: true, embeds: [
-          new EmbedBuilder().setColor(COLORS.danger).setDescription('⛔ Réservé aux agents.')
+        return interaction.reply({ embeds: [
+          new EmbedBuilder().setColor(COLORS.danger).setDescription('⛔ Réservé aux agents immobiliers / staff.')
         ]});
       }
       const id      = nextId('AN');
-      const name    = interaction.options.getString('nom');
-      const mode    = interaction.options.getString('mode');
-      const price   = interaction.options.getInteger('prix');
+      const name    = interaction.options.getString('nom', true);
+      const mode    = interaction.options.getString('mode', true);
+      const price   = interaction.options.getInteger('prix', true);
       const image   = interaction.options.getString('image') || null;
-      const contact = interaction.options.getUser('contact');
+      const contact = interaction.options.getUser('contact', true);
 
       addListing({ id, name, mode, price, image, contactId: contact.id });
 
-      return interaction.reply({ ephemeral: true, embeds: [
+      return interaction.reply({ embeds: [
         new EmbedBuilder()
           .setColor(COLORS.success)
           .setTitle('✅ Annonce publiée')
-          .setDescription(`**[${id}] ${name}**\nMode: **${mode}** — Prix: **${price.toLocaleString()} $**\nContact: <@${contact.id}>`)
+          .setDescription(
+            `**[${id}] ${name}**\n` +
+            `Mode: **${mode}** — Prix: **${price.toLocaleString()} $**\n` +
+            `Contact: <@${contact.id}>`
+          )
           .setImage(image || null)
       ]});
     }
 
-    // ───── ACHETER / LOUER (PUBLIC + DM) ─────
+    // ───── ACHETER / LOUER (PUBLIC + DM + 💸 crédit agent) ─────
     if (sub === 'acheter' || sub === 'louer') {
-      const annId = interaction.options.getString('annonce_id');
+      const annId = interaction.options.getString('annonce_id', true);
       const list  = listListings();
       const ad    = list.find(a => a.id === annId);
       if (!ad) {
@@ -184,15 +206,19 @@ module.exports = {
       addOwned(owned);
       removeListing(annId);
 
-      // DM au joueur avec l’ID propriété
+      // 💸 créditer l’agent : prix (vente) ou 1er loyer (location)
+      const credited = Number(ad.price) || 0;
+      if (credited > 0) {
+        creditAgentEnterprise(ad.contactId, credited);
+      }
+
+      // DM au joueur
       try {
         const dmEmbed = buildOwnerDMEmbed({ property: owned, mode: sub });
         await interaction.user.send({ embeds: [dmEmbed] });
-      } catch {
-        // DM fermés → on informera dans le canal ci-dessous
-      }
+      } catch {}
 
-      // Confirmation publique (jolie)
+      // Confirmation publique
       const pub = new EmbedBuilder()
         .setColor(COLORS.success)
         .setTitle(sub === 'louer' ? '📄 Location confirmée' : '🛒 Achat confirmé')
@@ -200,16 +226,20 @@ module.exports = {
           `Propriété **${owned.name}** enregistrée.\n` +
           `**ID :** \`${owned.id}\` — (l’ID complet a été envoyé en MP)`
         )
+        .addFields(
+          { name: 'Montant versé à l’agent', value: `${credited.toLocaleString()} $`, inline: true },
+          { name: 'Agent', value: `<@${ad.contactId}>`, inline: true }
+        )
         .setFooter({ text: 'SBC Immobilier' })
         .setTimestamp();
 
       return interaction.reply({ embeds: [pub] });
     }
 
-    // ───── RENOMMER (PUBLIC) ─────
+    // ───── RENOMMER (PROPRIO) ─────
     if (sub === 'nommer') {
-      const id   = interaction.options.getString('propriete_id');
-      const name = interaction.options.getString('nom');
+      const id   = interaction.options.getString('propriete_id', true);
+      const name = interaction.options.getString('nom', true);
       const p = findOwnedById(id);
       if (!p) {
         return interaction.reply({ embeds: [
@@ -227,10 +257,10 @@ module.exports = {
       ]});
     }
 
-    // ───── ACCÈS (PUBLIC) ─────
+    // ───── ACCÈS (PROPRIO) ─────
     if (sub === 'acces') {
-      const action = interaction.options.getString('action');
-      const id     = interaction.options.getString('propriete_id');
+      const action = interaction.options.getString('action', true);
+      const id     = interaction.options.getString('propriete_id', true);
       const p = findOwnedById(id);
       if (!p) {
         return interaction.reply({ embeds: [
@@ -284,6 +314,34 @@ module.exports = {
 
       return interaction.reply({ embeds: [
         new EmbedBuilder().setColor(COLORS.warning).setDescription('Action invalide. Utilise `add|remove|list`.')
+      ]});
+    }
+
+    // ───── SUPPRIMER (AGENT/STAFF) ─────
+    if (sub === 'supprimer') {
+      if (!isAgent(interaction.member)) {
+        return interaction.reply({ embeds: [
+          new EmbedBuilder().setColor(COLORS.danger).setDescription('⛔ Réservé aux agents immobiliers / staff.')
+        ]});
+      }
+      const id = interaction.options.getString('propriete_id', true);
+      const p  = findOwnedById(id);
+      if (!p) {
+        return interaction.reply({ embeds: [
+          new EmbedBuilder().setColor(COLORS.warning).setDescription('Propriété introuvable.')
+        ]});
+      }
+
+      // suppression de la propriété (et stockage si séparé, cf utils)
+      const ok = removeOwnedById(id);
+
+      return interaction.reply({ embeds: [
+        new EmbedBuilder()
+          .setColor(ok ? COLORS.success : COLORS.danger)
+          .setTitle(ok ? '🗑️ Propriété supprimée' : '❗ Échec de suppression')
+          .setDescription(ok
+            ? `La propriété **${p.name}** (\`${p.id}\`) a été supprimée ainsi que son stockage.`
+            : `Impossible de supprimer l’ID \`${id}\`.`)
       ]});
     }
   }
