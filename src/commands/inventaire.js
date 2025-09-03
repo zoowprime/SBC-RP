@@ -76,7 +76,7 @@ module.exports = {
         e.addFields({ name: `📦 ${cat}`, value: lines.substring(0,1024) });
       }
 
-      return interaction.reply({ embeds: [e], ephemeral: true });
+      return interaction.reply({ embeds: [e] });
     }
 
     // ---------- DONNER (items/drogues) ----------
