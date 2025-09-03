@@ -1,9 +1,11 @@
+// src/commands/inventaire.js
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const {
   listByCategory, getUserInv, setUserInv,
   addWeapon, removeWeapon, addVehicle, removeVehicle
 } = require('../utils/inventory');
 const { displayName } = require('../utils/items');
+const { getUser, fmt } = require('../economy'); // 🔗 pour synchroniser l’argent
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -38,6 +40,7 @@ module.exports = {
       .setDescription('Retirer une voiture (manuel)')
       .addStringOption(o=>o.setName('modele').setDescription('Modèle exact').setRequired(true))
       .addStringOption(o=>o.setName('plaque').setDescription('Plaque (si tu veux cibler)'))),
+  
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
     const userId = interaction.user.id;
@@ -45,6 +48,7 @@ module.exports = {
     // ---------- VOIR ----------
     if (sub === 'voir') {
       const data = listByCategory(userId);
+      const econ = getUser(interaction.guildId, userId); // 🔗 Récup solde en direct
       const e = new EmbedBuilder()
         .setTitle(`Inventaire de ${interaction.user.username}`)
         .setColor(0x2b2d31)
@@ -64,10 +68,10 @@ module.exports = {
           ? data.weapons.map(w => `• ${w.name}${w.serial?` — ${w.serial}`:''}${w.ammo?` — ${w.ammo} muns`:''}`).join('\n').slice(0,1024)
           : '— Aucun —'
       });
-      // Permis & argent
+      // Permis & argent liquide (sync économie)
       e.addFields(
         { name: '🪪 Permis', value: (data.permits||[]).length ? data.permits.join(', ') : '— Aucun —', inline: true },
-        { name: '💵 Liquide', value: `${data.liquide} $`, inline: true },
+        { name: '💵 Liquide', value: `${fmt(econ.current.liquid)} $`, inline: true },
       );
       // Items / Drogues
       for (const [cat, arr] of Object.entries(data.cats)) {
