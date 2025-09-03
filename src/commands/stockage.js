@@ -1,127 +1,209 @@
+// src/commands/stockage.js
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { findOwnedById, setOwned, canAccess, totalStoredCount } = require('../utils/properties');
+const { findOwnedById, setOwned } = require('../utils/properties');
 const { getUserInv, setUserInv } = require('../utils/inventory');
 const { displayName } = require('../utils/items');
 
-function catOf(it) {
-  if (it.type === 'food') return 'Nourriture';
-  if (it.type === 'water') return 'Eau';
-  if (it.type === 'soda') return 'Soda';
-  return 'Autres';
+const COLORS = {
+  primary: 0x5865F2,
+  success: 0x57F287,
+  warning: 0xFEE75C,
+  danger:  0xED4245,
+  slate:   0x2B2D31,
+};
+
+const EMO = {
+  head: '📦',
+  ok: '✅',
+  in: '⬆️',
+  out: '⬇️',
+  prop: '🏠',
+  lock: '🔒',
+  list: '🗂️',
+  drug: '💊',
+  food: '🍔',
+  water: '💧',
+  soda: '🥤',
+  cash: '💵',
+};
+
+function can(userId, prop, right) {
+  if (!prop) return false;
+  if (prop.ownerId === userId) return true;
+  const entry = (prop.access || []).find(a => a.userId === userId);
+  if (!entry) return false;
+  if (right === 'voir') return entry.rights.includes('voir');
+  if (right === 'depot') return entry.rights.includes('depôt') || entry.rights.includes('depot');
+  if (right === 'retrait') return entry.rights.includes('retrait');
+  return false;
+}
+
+function catLabel(type) {
+  if (type === 'drug_final') return `${EMO.drug} Drogues`;
+  if (type === 'food')       return `${EMO.food} Nourriture`;
+  if (type === 'water')      return `${EMO.water} Eau`;
+  if (type === 'soda')       return `${EMO.soda} Soda`;
+  return `${EMO.list} Autres`;
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('stockage')
-    .setDescription('Stocker / retirer des items dans une propriété')
-    .addSubcommand(sc => sc.setName('ouvrir').setDescription('Voir le contenu')
-      .addStringOption(o=>o.setName('propriete_id').setDescription('ID propriété').setRequired(true)))
-    .addSubcommand(sc => sc.setName('depot').setDescription('Déposer depuis inventaire → propriété')
-      .addStringOption(o=>o.setName('propriete_id').setDescription('ID propriété').setRequired(true))
-      .addStringOption(o=>o.setName('item').setDescription('Nom affiché de l\'item').setRequired(true))
-      .addIntegerOption(o=>o.setName('quantite').setDescription('Quantité').setRequired(true)))
-    .addSubcommand(sc => sc.setName('retrait').setDescription('Retirer depuis propriété → inventaire')
-      .addStringOption(o=>o.setName('propriete_id').setDescription('ID propriété').setRequired(true))
-      .addStringOption(o=>o.setName('item').setDescription('Nom affiché de l\'item').setRequired(true))
-      .addIntegerOption(o=>o.setName('quantite').setDescription('Quantité').setRequired(true))),
+    .setDescription('Stockages de propriétés')
+    .addSubcommand(sc =>
+      sc.setName('ouvrir')
+        .setDescription('Ouvrir le stockage d’une propriété')
+        .addStringOption(o => o.setName('propriete_id').setDescription('ID propriété').setRequired(true))
+    )
+    .addSubcommand(sc =>
+      sc.setName('depot')
+        .setDescription('Déposer depuis votre inventaire vers le stockage')
+        .addStringOption(o => o.setName('propriete_id').setDescription('ID propriété').setRequired(true))
+        .addStringOption(o => o.setName('type').setDescription('food|water|soda|drug_final|autre').setRequired(true))
+        .addStringOption(o => o.setName('nom').setDescription('Nom affiché (ex: burger, Amnesia (Weed))').setRequired(true))
+        .addIntegerOption(o => o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
+    )
+    .addSubcommand(sc =>
+      sc.setName('retrait')
+        .setDescription('Retirer du stockage vers votre inventaire')
+        .addStringOption(o => o.setName('propriete_id').setDescription('ID propriété').setRequired(true))
+        .addStringOption(o => o.setName('type').setDescription('food|water|soda|drug_final|autre').setRequired(true))
+        .addStringOption(o => o.setName('nom').setDescription('Nom affiché exact').setRequired(true))
+        .addIntegerOption(o => o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
+    ),
+
   async execute(interaction) {
-    const sub = interaction.options.getSubcommand();
-    const userId = interaction.user.id;
+    const sub   = interaction.options.getSubcommand();
+    const pid   = interaction.options.getString('propriete_id');
+    const user  = interaction.user;
+    const prop  = findOwnedById(pid);
+
+    if (!prop) {
+      return interaction.reply({
+        embeds: [ new EmbedBuilder().setColor(COLORS.danger).setDescription('Propriété introuvable.') ]
+      });
+    }
 
     // ---------- OUVRIR ----------
     if (sub === 'ouvrir') {
-      const id = interaction.options.getString('propriete_id');
-      const p = findOwnedById(id);
-      if (!p) return interaction.reply({ content: 'Propriété introuvable.', ephemeral: true });
-      if (!canAccess(p, userId, 'view')) return interaction.reply({ content: '⛔ Accès refusé.', ephemeral: true });
+      if (!can(user.id, prop, 'voir')) {
+        return interaction.reply({
+          embeds: [ new EmbedBuilder().setColor(COLORS.danger).setDescription(`${EMO.lock} Accès refusé.`) ]
+        });
+      }
+
+      const groups = { food: [], water: [], soda: [], drug_final: [], other: [] };
+      for (const it of (prop.storage?.items || [])) {
+        const line = `• ${displayName(it)} × **${it.qty}**`;
+        if (it.type === 'food') groups.food.push(line);
+        else if (it.type === 'water') groups.water.push(line);
+        else if (it.type === 'soda') groups.soda.push(line);
+        else if (it.type === 'drug_final') groups.drug_final.push(line);
+        else groups.other.push(line);
+      }
 
       const e = new EmbedBuilder()
-        .setTitle(`Stockage — ${p.name} [${p.id}]`)
-        .setColor(0x2b2d31)
+        .setColor(COLORS.primary)
+        .setTitle(`${EMO.prop} Stockage — ${prop.name}`)
+        .setDescription(`ID: \`${prop.id}\``)
+        .setFooter({ text: 'SBC Immobilier' })
         .setTimestamp();
 
-      const byCat = {};
-      for (const it of (p.storage.items || [])) {
-        const c = catOf(it);
-        byCat[c] = byCat[c] || [];
-        byCat[c].push(it);
-      }
-      for (const [cat, arr] of Object.entries(byCat)) {
-        const lines = arr.map(it => `• ${displayName(it)} × **${it.qty}**`).join('\n').slice(0, 1024);
-        e.addFields({ name: `• ${cat}`, value: lines || '—' });
-      }
-      e.setFooter({ text: `Capacité utilisée: ${totalStoredCount(p)}/2000` });
-      return interaction.reply({ embeds: [e], ephemeral: true });
+      const push = (name, arr) => {
+        e.addFields({ name, value: arr.length ? arr.join('\n').slice(0,1024) : '_Vide._', inline: false });
+      };
+      push(catLabel('food'), groups.food);
+      push(catLabel('water'), groups.water);
+      push(catLabel('soda'), groups.soda);
+      push(catLabel('drug_final'), groups.drug_final);
+      if (groups.other.length) push(catLabel('other'), groups.other);
+
+      return interaction.reply({ embeds: [e] }); // public
     }
+
+    // Helpers pour dépôt/retrait
+    const type   = interaction.options.getString('type');
+    const name   = interaction.options.getString('nom');
+    const qty    = interaction.options.getInteger('quantite');
+    prop.storage = prop.storage || { items: [] };
+
+    // Trouver item par libellé affiché
+    const findByLabel = (arr, label) =>
+      arr.find(i => displayName(i).toLowerCase() === label.toLowerCase());
 
     // ---------- DEPOT ----------
     if (sub === 'depot') {
-      const id = interaction.options.getString('propriete_id');
-      const name = interaction.options.getString('item');
-      const qty = interaction.options.getInteger('quantite');
-      const p = findOwnedById(id);
-      if (!p) return interaction.reply({ content: 'Propriété introuvable.', ephemeral: true });
-      if (!canAccess(p, userId, 'deposit')) return interaction.reply({ content: '⛔ Accès (dépôt) refusé.', ephemeral: true });
-      if (qty <= 0) return interaction.reply({ content: 'Quantité invalide.', ephemeral: true });
+      if (!can(user.id, prop, 'depot')) {
+        return interaction.reply({
+          embeds: [ new EmbedBuilder().setColor(COLORS.danger).setDescription(`${EMO.lock} Accès dépôt refusé.`) ]
+        });
+      }
 
-      // chercher l'item dans l'inventaire par son "nom affiché"
-      const inv = getUserInv(userId);
-      const idx = inv.items.findIndex(it => displayName(it).toLowerCase() === name.toLowerCase());
-      if (idx === -1) return interaction.reply({ content: 'Item introuvable dans votre inventaire.', ephemeral: true });
-      if (inv.items[idx].qty < qty) return interaction.reply({ content: 'Quantité insuffisante.', ephemeral: true });
+      const inv = getUserInv(user.id);
+      const src = findByLabel(inv.items, name);
+      if (!src || src.qty < qty || (type && src.type !== type)) {
+        return interaction.reply({
+          embeds: [ new EmbedBuilder().setColor(COLORS.warning).setDescription(`Item introuvable ou quantité insuffisante.`) ]
+        });
+      }
 
-      // capacité
-      const cap = totalStoredCount(p);
-      if (cap + qty > 2000) return interaction.reply({ content: 'Capacité de 2000 items atteinte.', ephemeral: true });
+      // retirer de l’inventaire joueur
+      src.qty -= qty;
+      if (src.qty <= 0) inv.items = inv.items.filter(i => i !== src);
+      setUserInv(user.id, inv);
 
-      // transfert inventaire -> propriété (empilement strict: même type+name)
-      const moving = { ...inv.items[idx], qty };
-      inv.items[idx].qty -= qty;
-      if (inv.items[idx].qty === 0) inv.items.splice(idx, 1);
-      setUserInv(userId, inv);
+      // ajouter au stockage (stack strict)
+      const key = JSON.stringify({ type: src.type, name: src.name, base: src.base, custom: src.custom });
+      const dst = prop.storage.items.find(i => JSON.stringify({ type: i.type, name: i.name, base: i.base, custom: i.custom }) === key);
+      if (dst) dst.qty += qty;
+      else prop.storage.items.push({ ...src, qty });
 
-      p.storage.items = p.storage.items || [];
-      const matchIdx = p.storage.items.findIndex(it =>
-        it.type === moving.type &&
-        it.name === moving.name
-      );
-      if (matchIdx >= 0) p.storage.items[matchIdx].qty += qty;
-      else p.storage.items.push(moving);
-      setOwned(p);
+      setOwned(prop);
 
-      return interaction.reply({ content: `✅ Déposé **${qty}× ${name}** dans ${p.name}.`, ephemeral: true });
+      const e = new EmbedBuilder()
+        .setColor(COLORS.success)
+        .setTitle(`${EMO.in} Dépôt effectué`)
+        .setDescription(`${displayName(src)} × **${qty}** → **${prop.name}**`)
+        .setFooter({ text: `Propriété ${prop.id}` })
+        .setTimestamp();
+      return interaction.reply({ embeds: [e] });
     }
 
     // ---------- RETRAIT ----------
     if (sub === 'retrait') {
-      const id = interaction.options.getString('propriete_id');
-      const name = interaction.options.getString('item');
-      const qty = interaction.options.getInteger('quantite');
-      const p = findOwnedById(id);
-      if (!p) return interaction.reply({ content: 'Propriété introuvable.', ephemeral: true });
-      if (!canAccess(p, userId, 'withdraw')) return interaction.reply({ content: '⛔ Accès (retrait) refusé.', ephemeral: true });
-      if (qty <= 0) return interaction.reply({ content: 'Quantité invalide.', ephemeral: true });
+      if (!can(user.id, prop, 'retrait')) {
+        return interaction.reply({
+          embeds: [ new EmbedBuilder().setColor(COLORS.danger).setDescription(`${EMO.lock} Accès retrait refusé.`) ]
+        });
+      }
 
-      const i = p.storage.items.findIndex(it => displayName(it).toLowerCase() === name.toLowerCase());
-      if (i === -1) return interaction.reply({ content: 'Item introuvable en stockage.', ephemeral: true });
-      if (p.storage.items[i].qty < qty) return interaction.reply({ content: 'Quantité insuffisante en stockage.', ephemeral: true });
+      const pool = prop.storage.items;
+      const src  = findByLabel(pool, name);
+      if (!src || (type && src.type !== type) || src.qty < qty) {
+        return interaction.reply({
+          embeds: [ new EmbedBuilder().setColor(COLORS.warning).setDescription(`Item introuvable ou quantité insuffisante en stockage.`) ]
+        });
+      }
 
-      // transfert propriété -> inventaire (empilement strict)
-      const moving = { ...p.storage.items[i], qty };
-      p.storage.items[i].qty -= qty;
-      if (p.storage.items[i].qty === 0) p.storage.items.splice(i, 1);
-      setOwned(p);
+      // retirer du stockage
+      src.qty -= qty;
+      if (src.qty <= 0) prop.storage.items = pool.filter(i => i !== src);
+      setOwned(prop);
 
-      const inv = getUserInv(userId);
-      const matchIdx = inv.items.findIndex(it =>
-        it.type === moving.type &&
-        it.name === moving.name
-      );
-      if (matchIdx >= 0) inv.items[matchIdx].qty += qty;
-      else inv.items.push(moving);
-      setUserInv(userId, inv);
+      // ajouter à l’inventaire joueur (stack strict)
+      const inv = getUserInv(user.id);
+      const key = JSON.stringify({ type: src.type, name: src.name, base: src.base, custom: src.custom });
+      const dst = inv.items.find(i => JSON.stringify({ type: i.type, name: i.name, base: i.base, custom: i.custom }) === key);
+      if (dst) dst.qty += qty; else inv.items.push({ ...src, qty });
+      setUserInv(user.id, inv);
 
-      return interaction.reply({ content: `✅ Retiré **${qty}× ${name}** de ${p.name}.`, ephemeral: true });
+      const e = new EmbedBuilder()
+        .setColor(COLORS.success)
+        .setTitle(`${EMO.out} Retrait effectué`)
+        .setDescription(`${displayName(src)} × **${qty}** ← **${prop.name}**`)
+        .setFooter({ text: `Propriété ${prop.id}` })
+        .setTimestamp();
+      return interaction.reply({ embeds: [e] });
     }
   }
 };
