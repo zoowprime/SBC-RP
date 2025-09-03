@@ -1,249 +1,149 @@
-// src/commands/inventaire.js
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-require('dotenv').config({ path: './id.env' });
-
 const {
-  BLACK, CAT_CHOICES, validCategory, sanitize,
-  getInv, setInv, buildInventoryEmbed, isStaff, logInventory,
-} = require('../inventory');
+  listByCategory, getUserInv, setUserInv,
+  addWeapon, removeWeapon, addVehicle, removeVehicle
+} = require('../utils/inventory');
+const { displayName } = require('../utils/items');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('inventaire')
-    .setDescription('Inventaire persistant (Voitures, Armes, Permis)')
+    .setDescription('Inventaire SBC (voitures, armes, permis, argent, items, drogues)')
+    // Afficher
+    .addSubcommand(sc => sc.setName('voir').setDescription('Affiche ton inventaire complet'))
+    // Donner (items & drogues seulement)
+    .addSubcommand(sc => sc.setName('donner')
+      .setDescription('Donner un item (Nourriture/Eau/Soda/Drogue) à un joueur')
+      .addUserOption(o=>o.setName('cible').setDescription('Joueur cible').setRequired(true))
+      .addStringOption(o=>o.setName('categorie').setDescription('Nourriture|Eau|Soda|Drogues').setRequired(true))
+      .addStringOption(o=>o.setName('item').setDescription('Nom affiché').setRequired(true))
+      .addIntegerOption(o=>o.setName('quantite').setDescription('Quantité').setRequired(true)))
+    // Armes (manuel)
+    .addSubcommand(sc => sc.setName('arme_ajouter')
+      .setDescription('Ajouter une arme (manuel)')
+      .addStringOption(o=>o.setName('nom').setDescription('Ex: pistolet de combat').setRequired(true))
+      .addStringOption(o=>o.setName('serial').setDescription('Numéro de série'))
+      .addIntegerOption(o=>o.setName('munitions').setDescription('Munitions')))
+    .addSubcommand(sc => sc.setName('arme_retirer')
+      .setDescription('Retirer une arme (manuel)')
+      .addStringOption(o=>o.setName('nom').setDescription('Nom exact').setRequired(true))
+      .addStringOption(o=>o.setName('serial').setDescription('Numéro de série (si tu veux cibler)')))
+    // Voitures (manuel)
+    .addSubcommand(sc => sc.setName('voiture_ajouter')
+      .setDescription('Ajouter une voiture (manuel)')
+      .addStringOption(o=>o.setName('modele').setDescription('Ex: Buffalo STX').setRequired(true))
+      .addStringOption(o=>o.setName('plaque').setDescription('Plaque'))
+      .addBooleanOption(o=>o.setName('assuree').setDescription('Assurance')))
+    .addSubcommand(sc => sc.setName('voiture_retirer')
+      .setDescription('Retirer une voiture (manuel)')
+      .addStringOption(o=>o.setName('modele').setDescription('Modèle exact').setRequired(true))
+      .addStringOption(o=>o.setName('plaque').setDescription('Plaque (si tu veux cibler)'))),
+  async execute(interaction) {
+    const sub = interaction.options.getSubcommand();
+    const userId = interaction.user.id;
 
-    // 1) Afficher
-    .addSubcommand(sc =>
-      sc.setName('afficher')
-        .setDescription('Afficher un inventaire.')
-        .addUserOption(o => o.setName('target').setDescription('Joueur à afficher').setRequired(false))
-    )
-
-    // 2) Ajouter (self)
-    .addSubcommand(sc =>
-      sc.setName('ajouter')
-        .setDescription('Ajouter un item à votre inventaire.')
-        .addStringOption(o =>
-          o.setName('categorie')
-           .setDescription('Catégorie')
-           .addChoices(
-             { name: 'Voitures', value: 'voitures' },
-             { name: 'Armes',    value: 'armes'    },
-             { name: 'Permis',   value: 'permis'   },
-           )
-           .setRequired(true)
-        )
-        .addStringOption(o =>
-          o.setName('item')
-           .setDescription("Nom de l'item")
-           .setRequired(true)
-        )
-    )
-
-    // 3) Retirer (self)
-    .addSubcommand(sc =>
-      sc.setName('retirer')
-        .setDescription('Retirer un item de votre inventaire (nom exact).')
-        .addStringOption(o =>
-          o.setName('categorie')
-           .setDescription('Catégorie')
-           .addChoices(
-             { name: 'Voitures', value: 'voitures' },
-             { name: 'Armes',    value: 'armes'    },
-             { name: 'Permis',   value: 'permis'   },
-           )
-           .setRequired(true)
-        )
-        .addStringOption(o =>
-          o.setName('item')
-           .setDescription("Nom exact à retirer")
-           .setRequired(true)
-        )
-    )
-
-    // 4) Supprimer (staff) — reset total
-    .addSubcommand(sc =>
-      sc.setName('supprimer')
-        .setDescription("STAFF : réinitialiser totalement l'inventaire d'un joueur.")
-        .addUserOption(o => o.setName('target').setDescription('Joueur visé').setRequired(true))
-    )
-
-    // 5) Voler
-    .addSubcommand(sc =>
-      sc.setName('voler')
-        .setDescription("Voler un item dans l'inventaire d'un joueur.")
-        .addUserOption(o => o.setName('target').setDescription('Victime').setRequired(true))
-        .addStringOption(o =>
-          o.setName('categorie')
-           .setDescription('Catégorie de l’item à voler')
-           .addChoices(
-             { name: 'Voitures', value: 'voitures' },
-             { name: 'Armes',    value: 'armes'    },
-             { name: 'Permis',   value: 'permis'   },
-           )
-           .setRequired(true)
-        )
-        .addStringOption(o =>
-          o.setName('item')
-           .setDescription("Nom exact à voler")
-           .setRequired(true)
-        )
-    )
-    .setDMPermission(false),
-
-  async execute(interaction, client) {
-    const sub    = interaction.options.getSubcommand();
-    const guildId= interaction.guildId;
-    const me     = interaction.user;
-
-    // 1) Afficher
-    if (sub === 'afficher') {
-      const target = interaction.options.getUser('target') || me;
-      const inv    = getInv(guildId, target.id);
-
-      const embed = new EmbedBuilder(buildInventoryEmbed({ tag: target.tag, inv }))
-        .setTitle(`🗃️ Inventaire de ${target.tag}`) // réassure le titre
-        .setColor(BLACK)
-        .setThumbnail(target.displayAvatarURL({ extension: 'png', size: 128 }));
-
-      return interaction.reply({ embeds: [embed] });
-    }
-
-    // 2) Ajouter
-    if (sub === 'ajouter') {
-      const key  = interaction.options.getString('categorie', true);
-      const meta = validCategory(key);
-      if (!meta) return interaction.reply({ content: '❌ Catégorie invalide.' });
-
-      const item = sanitize(interaction.options.getString('item', true));
-      if (!item) return interaction.reply({ content: '❌ Nom invalide.' });
-
-      let added = false;
-      const inv = setInv(guildId, me.id, (u) => {
-        if (!u[key].includes(item)) {
-          u[key].push(item);
-          added = true;
-        }
-      });
-
-      if (!added) {
-        return interaction.reply({ content: `ℹ️ L’item **${item}** est déjà présent dans **${meta.label}**.` });
-      }
-
-      await logInventory(client, `➕ ${interaction.user.tag} a ajouté **${item}** dans ${meta.label}.`);
-
-      const embed = new EmbedBuilder()
-        .setColor(BLACK)
-        .setTitle(`${meta.emoji} Ajout à l’inventaire`)
-        .setDescription(`**${item}** ajouté dans **${meta.label}**.`)
-        .setFooter({ text: 'SBC Inventaire' })
+    // ---------- VOIR ----------
+    if (sub === 'voir') {
+      const data = listByCategory(userId);
+      const e = new EmbedBuilder()
+        .setTitle(`Inventaire de ${interaction.user.username}`)
+        .setColor(0x2b2d31)
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed] });
-    }
-
-    // 3) Retirer
-    if (sub === 'retirer') {
-      const key  = interaction.options.getString('categorie', true);
-      const meta = validCategory(key);
-      if (!meta) return interaction.reply({ content: '❌ Catégorie invalide.' });
-
-      const item = sanitize(interaction.options.getString('item', true));
-      if (!item) return interaction.reply({ content: '❌ Nom invalide.' });
-
-      let removed = false;
-      const inv = setInv(guildId, me.id, (u) => {
-        const idx = u[key].indexOf(item);
-        if (idx !== -1) {
-          u[key].splice(idx, 1);
-          removed = true;
-        }
+      // Voitures
+      e.addFields({
+        name: '🚗 Voitures',
+        value: data.vehicles.length
+          ? data.vehicles.map(v => `• ${v.model}${v.plate?` — ${v.plate}`:''}${v.insured?' (assurée)':''}`).join('\n').slice(0,1024)
+          : '— Aucun —'
       });
-
-      if (!removed) {
-        return interaction.reply({ content: `❌ **${item}** n’a pas été trouvé dans **${meta.label}** (nom exact requis).` });
+      // Armes
+      e.addFields({
+        name: '🗡️ Armes',
+        value: data.weapons.length
+          ? data.weapons.map(w => `• ${w.name}${w.serial?` — ${w.serial}`:''}${w.ammo?` — ${w.ammo} muns`:''}`).join('\n').slice(0,1024)
+          : '— Aucun —'
+      });
+      // Permis & argent
+      e.addFields(
+        { name: '🪪 Permis', value: (data.permits||[]).length ? data.permits.join(', ') : '— Aucun —', inline: true },
+        { name: '💵 Liquide', value: `${data.liquide} $`, inline: true },
+      );
+      // Items / Drogues
+      for (const [cat, arr] of Object.entries(data.cats)) {
+        if (!arr.length) continue;
+        const lines = arr.map(it => `• ${displayName(it)} × **${it.qty}**`).join('\n');
+        e.addFields({ name: `📦 ${cat}`, value: lines.substring(0,1024) });
       }
 
-      await logInventory(client, `➖ ${interaction.user.tag} a retiré **${item}** de ${meta.label}.`);
-
-      const embed = new EmbedBuilder()
-        .setColor(BLACK)
-        .setTitle(`🗑️ Retrait d’inventaire`)
-        .setDescription(`**${item}** retiré de **${meta.label}**.`)
-        .setFooter({ text: 'SBC Inventaire' })
-        .setTimestamp();
-
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply({ embeds: [e], ephemeral: true });
     }
 
-    // 4) Supprimer (reset total) — STAFF
-    if (sub === 'supprimer') {
-      if (!isStaff(interaction)) {
-        return interaction.reply({ content: '❌ Réservé au staff.' });
-      }
-      const target = interaction.options.getUser('target', true);
+    // ---------- DONNER (items/drogues) ----------
+    if (sub === 'donner') {
+      const cible = interaction.options.getUser('cible');
+      const cat = interaction.options.getString('categorie');
+      const itemName = interaction.options.getString('item');
+      const qty = interaction.options.getInteger('quantite');
+      if (qty <= 0) return interaction.reply({ content: 'Quantité invalide.', ephemeral: true });
 
-      setInv(guildId, target.id, (u) => {
-        u.voitures = [];
-        u.armes    = [];
-        u.permis   = [];
+      const invSelf = getUserInv(userId);
+      const line = invSelf.items.find(it => {
+        const ok =
+          (it.type==='food' && cat==='Nourriture') ||
+          (it.type==='water' && cat==='Eau') ||
+          (it.type==='soda' && cat==='Soda') ||
+          (it.type==='drug_final' && cat==='Drogues');
+        if (!ok) return false;
+        return (require('../utils/items').displayName(it)).toLowerCase() === itemName.toLowerCase();
       });
+      if (!line) return interaction.reply({ content: 'Item introuvable dans ton inventaire.', ephemeral: true });
+      if (line.qty < qty) return interaction.reply({ content: 'Quantité insuffisante.', ephemeral: true });
 
-      await logInventory(client, `🧹 Reset total de l’inventaire de ${target.tag} par ${interaction.user.tag}.`);
+      // remove from sender
+      const idx = invSelf.items.indexOf(line);
+      invSelf.items[idx].qty -= qty;
+      if (invSelf.items[idx].qty <= 0) invSelf.items.splice(idx,1);
+      setUserInv(userId, invSelf);
 
-      const embed = new EmbedBuilder()
-        .setColor(BLACK)
-        .setTitle(`🧹 Inventaire réinitialisé`)
-        .setDescription(`L’inventaire de **${target.tag}** a été **entièrement** supprimé.`)
-        .setFooter({ text: 'SBC Inventaire • STAFF' })
-        .setTimestamp();
+      // add to receiver (stack strict)
+      const invRx = getUserInv(cible.id);
+      const key = JSON.stringify({ type: line.type, name: line.name, base: line.base, custom: line.custom });
+      const match = invRx.items.find(i => JSON.stringify({ type: i.type, name: i.name, base: i.base, custom: i.custom }) === key);
+      if (match) match.qty += qty; else invRx.items.push({ ...line, qty });
+      setUserInv(cible.id, invRx);
 
-      return interaction.reply({ embeds: [embed] });
+      return interaction.reply({ content: `✅ Transféré **${qty}× ${itemName}** à ${cible}.`, ephemeral: true });
     }
 
-    // 5) Voler
-    if (sub === 'voler') {
-      const target = interaction.options.getUser('target', true);
-      if (target.id === me.id) return interaction.reply({ content: '❌ Tu ne peux pas te voler toi-même.' });
-
-      const key  = interaction.options.getString('categorie', true);
-      const meta = validCategory(key);
-      if (!meta) return interaction.reply({ content: '❌ Catégorie invalide.' });
-
-      const item = sanitize(interaction.options.getString('item', true));
-      if (!item) return interaction.reply({ content: '❌ Nom invalide.' });
-
-      let ok = false;
-      // Retire chez la victime…
-      const victimInv = getInv(guildId, target.id);
-      if (!victimInv[key].includes(item)) {
-        return interaction.reply({ content: `❌ **${item}** n’est pas présent dans **${meta.label}** de ${target.tag}.` });
-      }
-      setInv(guildId, target.id, (u) => {
-        const idx = u[key].indexOf(item);
-        if (idx !== -1) {
-          u[key].splice(idx, 1);
-          ok = true;
-        }
-      });
-      if (!ok) {
-        return interaction.reply({ content: `❌ Impossible de voler **${item}** (race condition). Réessaie.` });
-      }
-      // … et ajoute au voleur
-      setInv(guildId, me.id, (u) => {
-        if (!u[key].includes(item)) u[key].push(item);
-      });
-
-      await logInventory(client, `🕵️ ${interaction.user.tag} a volé **${item}** à ${target.tag} (cat: ${meta.label}).`);
-
-      const embed = new EmbedBuilder()
-        .setColor(BLACK)
-        .setTitle(`🕵️ Vol d’inventaire`)
-        .setDescription(`Tu as volé **${item}** à **${target.tag}**.\nAjouté à ta catégorie **${meta.label}**.`)
-        .setFooter({ text: 'SBC Inventaire' })
-        .setTimestamp();
-
-      return interaction.reply({ embeds: [embed] });
+    // ---------- ARMES (manuel) ----------
+    if (sub === 'arme_ajouter') {
+      const nom = interaction.options.getString('nom');
+      const serial = interaction.options.getString('serial') || null;
+      const ammo = interaction.options.getInteger('munitions') || 0;
+      addWeapon(userId, { name: nom, serial, ammo });
+      return interaction.reply({ content: `🔫 Ajouté: **${nom}**${serial?` (${serial})`:''}${ammo?` — ${ammo} muns`:''}`, ephemeral: true });
     }
-  },
+    if (sub === 'arme_retirer') {
+      const nom = interaction.options.getString('nom');
+      const serial = interaction.options.getString('serial') || null;
+      const ok = removeWeapon(userId, nom, serial);
+      return interaction.reply({ content: ok ? `🗑️ Retiré: **${nom}**` : 'Aucune arme correspondante.', ephemeral: true });
+    }
+
+    // ---------- VOITURES (manuel) ----------
+    if (sub === 'voiture_ajouter') {
+      const model = interaction.options.getString('modele');
+      const plate = interaction.options.getString('plaque') || null;
+      const insured = interaction.options.getBoolean('assuree') || false;
+      addVehicle(userId, { model, plate, insured });
+      return interaction.reply({ content: `🚗 Ajouté: **${model}**${plate?` — ${plate}`:''}${insured?' (assurée)':''}`, ephemeral: true });
+    }
+    if (sub === 'voiture_retirer') {
+      const model = interaction.options.getString('modele');
+      const plate = interaction.options.getString('plaque') || null;
+      const ok = removeVehicle(userId, model, plate);
+      return interaction.reply({ content: ok ? `🗑️ Retiré: **${model}**` : 'Aucun véhicule correspondant.', ephemeral: true });
+    }
+  }
 };
