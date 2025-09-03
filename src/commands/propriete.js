@@ -14,12 +14,14 @@ module.exports = {
     .setDescription('Système immobilier')
     .addSubcommand(sc => sc.setName('annonces').setDescription('Voir les annonces'))
     .addSubcommand(sc => sc.setName('publier')
-      .setDescription('Publier une annonce (agent)')
-      .addStringOption(o=>o.setName('nom').setDescription('Nom').setRequired(true))
-      .addStringOption(o=>o.setName('mode').setDescription('vente|location').setRequired(true))
-      .addIntegerOption(o=>o.setName('prix').setDescription('Prix ou loyer/sem.').setRequired(true))
-      .addStringOption(o=>o.setName('image').setDescription('URL image'))
-      .addUserOption(o=>o.setName('contact').setDescription('Contact agence').setRequired(true))
+  .setDescription('Publier une annonce (agent immo)')
+  .addStringOption(o=>o.setName('nom').setDescription('Nom de la propriété').setRequired(true))
+  .addStringOption(o=>o.setName('mode').setDescription('vente|location').setRequired(true))
+  .addIntegerOption(o=>o.setName('prix').setDescription('Prix (vente) ou loyer hebdo (location)').setRequired(true))
+  .addUserOption(o=>o.setName('contact').setDescription('Contact agence (tag)').setRequired(true)) // 👈 requis AVANT
+  .addStringOption(o=>o.setName('image').setDescription('URL image')) // 👈 optionnel APRÈS
+)
+
     )
     .addSubcommand(sc => sc.setName('acheter')
       .setDescription('Acheter depuis une annonce')
