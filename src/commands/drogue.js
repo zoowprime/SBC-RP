@@ -7,13 +7,11 @@ const { getUser, setUser } = require('../economy');
 
 const C = { primary: 0x5865F2, success: 0x57F287, warning: 0xFEE75C, danger: 0xED4245 };
 
-// ───────────────────────────────────────────────────────────────────────────────
 // Quotas vente (400 pochons/jour)
 function loadQuota() { return readJSON('drug_sales.json', { users: {} }); }
 function saveQuota(db) { writeJSON('drug_sales.json', db); }
 function todayKey() { const d = new Date(); return [d.getUTCFullYear(), d.getUTCMonth()+1, d.getUTCDate()].join('-'); }
 
-// ───────────────────────────────────────────────────────────────────────────────
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('drogue')
@@ -25,19 +23,33 @@ module.exports = {
     .addSubcommand(sc =>
       sc.setName('vendre')
         .setDescription('Vendre des pochons depuis ton inventaire')
-        .addStringOption(o => o.setName('type').setDescription('weed|coke|meth|crack').setRequired(true))
-        .addIntegerOption(o => o.setName('quantite').setDescription('Qté de pochons').setMinValue(1).setRequired(true))
-        .addStringOption(o => o.setName('lieu').setDescription('Ex: Rue de la Casse, Sandy Shores, Vinewood, Long Beach, Maze Bank Arena, Paleto').setRequired(true))
+        .addStringOption(o => o
+          .setName('type')
+          .setDescription('weed|coke|meth|crack')
+          .setRequired(true)
+          .setAutocomplete(true)
+        )
+        .addIntegerOption(o => o
+          .setName('quantite')
+          .setDescription('Qté de pochons')
+          .setMinValue(1)
+          .setRequired(true)
+        )
+        .addStringOption(o => o
+          .setName('lieu')
+          .setDescription('Choisis un lieu de vente')
+          .setRequired(true)
+          .setAutocomplete(true)
+        )
     )
     .addSubcommand(sc =>
       sc.setName('stop')
-        .setDescription('Stopper une session de vente (placeholder si un jour tu fais une vente en boucle)')
+        .setDescription('Stopper une session de vente (placeholder)')
     ),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
 
-    // ───────────────────────────────────────────────────────────────────────────
     if (sub === 'tarifs') {
       const z = listZones();
       const e = new EmbedBuilder()
@@ -54,14 +66,15 @@ module.exports = {
       return interaction.reply({ embeds: [e] });
     }
 
-    // ───────────────────────────────────────────────────────────────────────────
     if (sub === 'vendre') {
       const base = interaction.options.getString('type'); // weed|coke|meth|crack
       const qty  = interaction.options.getInteger('quantite');
       const lieu = interaction.options.getString('lieu');
 
       const baseOk = ['weed','coke','meth','crack'].includes(base);
-      if (!baseOk) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.danger).setDescription('Type invalide. Utilise **weed|coke|meth|crack**.')]});
+      if (!baseOk) {
+        return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.danger).setDescription('Type invalide. Utilise **weed|coke|meth|crack**.')]});
+      }
 
       // quota/jour
       const qdb = loadQuota(); const k = todayKey();
@@ -78,7 +91,7 @@ module.exports = {
         });
       }
 
-      // inventaire: on vend uniquement les "drug_final" correspondants
+      // inventaire: vendre uniquement les "drug_final" correspondants
       const inv = getUserInv(interaction.user.id);
       const lines = inv.items.filter(i => i.type === 'drug_final' && i.base === base);
       const totalHave = lines.reduce((a,b) => a + b.qty, 0);
@@ -91,7 +104,7 @@ module.exports = {
         });
       }
 
-      // prix unitaire (zones & pénalités)
+      // prix unitaire
       const { price, applied } = unitPrice(base, lieu);
       if (price <= 0) {
         return interaction.reply({
@@ -118,7 +131,7 @@ module.exports = {
 
       const total = price * qty;
 
-      // créditer en liquide (économie)
+      // créditer liquide
       const econ = getUser(interaction.guildId, interaction.user.id);
       econ.current.liquid += total;
       setUser(interaction.guildId, interaction.user.id, (u) => {
@@ -139,12 +152,10 @@ module.exports = {
       return interaction.reply({ embeds: [e] });
     }
 
-    // ───────────────────────────────────────────────────────────────────────────
     if (sub === 'stop') {
-      // Ici pas de vente en boucle pour l’instant, on affiche juste un message clair.
       const e = new EmbedBuilder()
         .setColor(C.primary)
-        .setDescription('Aucune session de vente continue n’est active. La commande **/drogue stop** est prête si tu actives un mode “vente en boucle” plus tard.');
+        .setDescription('Pas de vente continue active. Cette commande servira si tu actives un mode “vente en boucle”.');
       return interaction.reply({ embeds: [e] });
     }
   }
