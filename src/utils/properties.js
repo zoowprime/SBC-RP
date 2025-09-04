@@ -1,36 +1,132 @@
+// src/utils/properties.js
+// Persistance des propriétés (listings + owned) — robuste, aucun reset au require
 const { readJSON, writeJSON } = require('./store');
 
-// properties.json:
-// { listings:[{id,name,mode:'vente'|'location',price,image,contactId}],
-//   owned:[{id,ownerId,name,access:[{userId,rights:['view','deposit','withdraw']}],storage:{items:[]},rent:{active,agencyId,nextAt,weekly}}] }
+const FILE = 'properties.json';
 
-function db() { return readJSON('properties.json', { listings: [], owned: [], _seq: 0 }); }
-function save(data) { writeJSON('properties.json', data); }
+// Format: { seq: number, listings: [], owned: [] }
+function load() {
+  const db = readJSON(FILE, { seq: 1, listings: [], owned: [] });
+  if (typeof db.seq !== 'number') db.seq = 1;
+  if (!Array.isArray(db.listings)) db.listings = [];
+  if (!Array.isArray(db.owned)) db.owned = [];
+  return db;
+}
+function save(db) { writeJSON(FILE, db); }
 
-function nextId(prefix='PR') {
-  const data = db(); data._seq = (data._seq || 0) + 1; save(data);
-  return `${prefix}-${String(data._seq).padStart(6,'0')}`;
+// ID helper
+function nextId(prefix = 'PR') {
+  const db = load();
+  const id = `${prefix}${String(db.seq).padStart(5, '0')}`;
+  db.seq += 1;
+  save(db);
+  return id;
 }
 
-const listListings = () => db().listings;
-function addListing(l) { const d = db(); d.listings.push(l); save(d); return l; }
-function removeListing(id) { const d = db(); const i = d.listings.findIndex(x=>x.id===id); if(i<0)return false; d.listings.splice(i,1); save(d); return true; }
-
-function addOwned(p) { const d = db(); d.owned.push(p); save(d); return p; }
-function findOwnedById(id) { return db().owned.find(p=>p.id===id) || null; }
-function listOwnedByUser(userId) { return db().owned.filter(p => p.ownerId===userId || (p.access||[]).some(a=>a.userId===userId)); }
-function setOwned(p) { const d = db(); const i = d.owned.findIndex(x=>x.id===p.id); if(i>=0)d.owned[i]=p; else d.owned.push(p); save(d); }
-
-function canAccess(p, userId, right) {
-  if (p.ownerId === userId) return true;
-  const a = (p.access||[]).find(x=>x.userId===userId);
-  return !!(a && a.rights.includes(right));
+// ───────────────────────────────────────────────────────────────────────────────
+// LISTINGS (annonces agence)
+function listListings() {
+  const db = load();
+  return db.listings.slice();
 }
-function totalStoredCount(p){ return (p.storage?.items||[]).reduce((s,it)=>s+(it.qty||0),0); }
+function addListing(listing /* {id?, name, mode, price, image?, contactId} */) {
+  const db = load();
+  const id = listing.id || nextId('AN'); // si pas fourni
+  db.listings.push({ ...listing, id });
+  save(db);
+  return id;
+}
+function removeListing(id) {
+  const db = load();
+  db.listings = db.listings.filter(l => l.id !== id);
+  save(db);
+}
 
+// ───────────────────────────────────────────────────────────────────────────────
+// OWNED (propriétés acquises ou illégales)
+function listOwned() {
+  const db = load();
+  return db.owned.slice();
+}
+function addOwned(p /* { id?, ownerId, name, access?, storage?, rent?, vendor?, ptype? } */) {
+  const db = load();
+  const id = p.id || nextId('PR');
+  // valeur par défaut propre
+  const entry = {
+    id,
+    ownerId: p.ownerId,
+    name: p.name || id,
+    access: Array.isArray(p.access) ? p.access : [],
+    storage: p.storage && typeof p.storage === 'object' ? p.storage : { items: [] },
+    rent: p.rent || null,
+    vendor: !!p.vendor,
+    ptype: p.ptype || null,  // weed|coke|meth|crack pour les sites illégaux
+  };
+  db.owned.push(entry);
+  save(db);
+  return id;
+}
+function findOwnedById(id) {
+  const db = load();
+  return db.owned.find(p => p.id === id) || null;
+}
+function setOwned(updated /* objet propriété complet */) {
+  const db = load();
+  const idx = db.owned.findIndex(p => p.id === updated.id);
+  if (idx === -1) return false;
+  // petite sanitation
+  if (!updated.storage || typeof updated.storage !== 'object') updated.storage = { items: [] };
+  if (!Array.isArray(updated.storage.items)) updated.storage.items = [];
+  db.owned[idx] = updated;
+  save(db);
+  return true;
+}
+function removeOwned(id) {
+  const db = load();
+  db.owned = db.owned.filter(p => p.id !== id);
+  save(db);
+  return true;
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Accès / droits
+function grantAccess(propId, userId, rights /* array ex: ['voir','depôt','retrait'] */) {
+  const p = findOwnedById(propId);
+  if (!p) return false;
+  p.access = p.access || [];
+  const ex = p.access.find(a => a.userId === userId);
+  if (ex) ex.rights = rights;
+  else p.access.push({ userId, rights });
+  return setOwned(p);
+}
+function revokeAccess(propId, userId) {
+  const p = findOwnedById(propId);
+  if (!p) return false;
+  p.access = (p.access || []).filter(a => a.userId !== userId);
+  return setOwned(p);
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
+// Exports
 module.exports = {
-  db, save, nextId,
-  listListings, addListing, removeListing,
-  addOwned, findOwnedById, listOwnedByUser, setOwned,
-  canAccess, totalStoredCount
+  // bas niveau
+  db: load,
+  save,
+  nextId,
+
+  // listings
+  listListings,
+  addListing,
+  removeListing,
+
+  // owned
+  listOwned,
+  addOwned,
+  findOwnedById,
+  setOwned,
+  removeOwned,
+
+  // access helpers
+  grantAccess,
+  revokeAccess,
 };
