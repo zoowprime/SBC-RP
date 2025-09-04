@@ -1,47 +1,177 @@
 // src/commands/stockage.js
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { findOwnedById } = require('../utils/properties');
-const { listAccessibleProps } = require('../utils/props-access');
-const { sendPropertyPicker } = require('../ui/pickers');
+const { findOwnedById, listAccessibleForUser, setOwned } = require('../utils/properties');
+const { getUserInv, setUserInv } = require('../utils/inventory');
+const { displayName } = require('../utils/items');
 
-const COLOR = 0x57F287;
+const C = { primary:0x5865F2, success:0x57F287, warning:0xFEE75C, danger:0xED4245 };
 
-async function openStorage(interaction, pid, fromPicker = false) {
-  const p = findOwnedById(pid);
-  if (!p) {
-    if (fromPicker) return interaction.update({ content:'Propriété introuvable.', components:[], embeds:[] });
-    return interaction.reply({ content:'Propriété introuvable.' });
-  }
+function canDo(p, uid, right) {
+  if (p.ownerId === uid) return true;
+  return (p.access || []).some(a => a.userId === uid && (a.rights||[]).includes(right));
+}
+
+function summarizeStorage(p) {
   const items = (p.storage?.items || []);
-  const inv = items.length ? items.map(i => `• **${i.name}** — ${i.qty}`).join('\n').slice(0, 4000) : '— Vide —';
-  const e = new EmbedBuilder().setColor(COLOR).setTitle(`📦 Stockage — ${p.name}`).setDescription(inv);
-  if (fromPicker) return interaction.update({ embeds:[e], components:[] });
-  return interaction.reply({ embeds:[e] });
+  if (!items.length) return '_Vide._';
+
+  // regrouper par type
+  const groups = {};
+  for (const it of items) {
+    const key = it.type || 'autre';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(it);
+  }
+  const order = ['food','water','soda','drug_final','raw','mid','autre'];
+  const em = { food:'🍔', water:'💧', soda:'🥤', drug_final:'🧪', raw:'📦', mid:'🧰', autre:'📦' };
+
+  let out = '';
+  for (const k of order) {
+    if (!groups[k]) continue;
+    const lines = groups[k].map(it => `• ${displayName(it)} × **${it.qty}**`).join('\n');
+    out += `**${em[k]||'📦'} ${k.toUpperCase()}**\n${lines}\n\n`;
+  }
+  return out.slice(0, 3900) || '_Vide._';
 }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('stockage')
-    .setDescription('Ouvrir le stockage d’une propriété')
+    .setDescription('Stockages de propriétés (ouvrir / dépôt / retrait)')
     .addSubcommand(sc => sc.setName('ouvrir')
-      .setDescription('Voir le stockage d’une propriété accessible')
-      .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) ID ou laisse vide pour menu'))
+      .setDescription('Ouvrir un stockage de propriété')
+      .addStringOption(o => o
+        .setName('propriete_id')
+        .setDescription('(facultatif) ID ou laisse vide et choisis dans le menu')
+        .setRequired(false)
+        .setAutocomplete(true)
+      )
+    )
+    .addSubcommand(sc => sc.setName('depot')
+      .setDescription('Déposer un item de ton inventaire vers la propriété')
+      .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) ID ou sélection menu').setRequired(false).setAutocomplete(true))
+      .addStringOption(o => o.setName('item').setDescription('Nom affiché (exact)').setRequired(true))
+      .addIntegerOption(o => o.setName('quantite').setDescription('Quantité').setMinValue(1).setRequired(true))
+    )
+    .addSubcommand(sc => sc.setName('retrait')
+      .setDescription('Retirer un item du stockage vers ton inventaire')
+      .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) ID ou sélection menu').setRequired(false).setAutocomplete(true))
+      .addStringOption(o => o.setName('item').setDescription('Nom affiché (exact)').setRequired(true))
+      .addIntegerOption(o => o.setName('quantite').setDescription('Quantité').setMinValue(1).setRequired(true))
     ),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
     const uid = interaction.user.id;
 
-    if (sub === 'ouvrir') {
-      const pid = interaction.options.getString('propriete_id');
-      if (!pid) {
-        const props = listAccessibleProps(uid, null).map(p => ({ id:p.id, name:p.name, ptype:p.ptype||null }));
-        return sendPropertyPicker(interaction, props, 'PROP_PICK:stockage_ouvrir', 'Choisis une propriété', true);
-      }
-      return openStorage(interaction, pid);
-    }
-  },
+    // récup éventuelle de la propriété via autocomplete
+    const pid = interaction.options.getString('propriete_id');
+    let prop = null;
 
-  // hook pour picker
-  async openFromPicker(interaction, propId) { return openStorage(interaction, propId, true); }
+    if (sub === 'ouvrir') {
+      if (!pid) {
+        const props = listAccessibleForUser(uid);
+        if (!props.length) return interaction.reply({ content: 'Tu n’as accès à aucune propriété.', ephemeral: true });
+        return interaction.reply({
+          embeds: [ new EmbedBuilder()
+            .setColor(C.primary)
+            .setTitle('📦 Ouvrir un stockage')
+            .setDescription('Clique dans le champ **propriete_id** de la commande et **sélectionne ta propriété** dans la liste (autocomplete).')
+          ]
+        });
+      }
+      prop = findOwnedById(pid);
+      if (!prop) return interaction.reply({ content: 'Propriété introuvable.', ephemeral: true });
+      if (!canDo(prop, uid, 'voir')) return interaction.reply({ content: 'Accès refusé.', ephemeral: true });
+
+      const e = new EmbedBuilder()
+        .setColor(C.primary)
+        .setTitle(`📦 Stockage — ${prop.name} [${prop.id}]`)
+        .setDescription(summarizeStorage(prop))
+        .setFooter({ text: prop.type ? `Type: ${prop.type}` : 'Type: N/A' })
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [e] });
+    }
+
+    if (sub === 'depot') {
+      if (!pid) {
+        return interaction.reply({
+          embeds: [ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et **choisis dans la liste** (autocomplete).') ],
+          ephemeral: true
+        });
+      }
+      prop = findOwnedById(pid);
+      if (!prop) return interaction.reply({ content: 'Propriété introuvable.', ephemeral: true });
+      if (!canDo(prop, uid, 'depôt')) return interaction.reply({ content: 'Accès dépôt refusé.', ephemeral: true });
+
+      const itemName = interaction.options.getString('item');
+      const qty = interaction.options.getInteger('quantite');
+
+      const inv = getUserInv(uid);
+      const line = inv.items.find(i => displayName(i).toLowerCase() === itemName.toLowerCase());
+      if (!line) return interaction.reply({ content: 'Item introuvable dans ton inventaire.', ephemeral: true });
+      if (line.qty < qty) return interaction.reply({ content: 'Quantité insuffisante.', ephemeral: true });
+
+      // retirer de l’inventaire
+      line.qty -= qty;
+      if (line.qty <= 0) inv.items = inv.items.filter(i => i !== line);
+      setUserInv(uid, inv);
+
+      // ajouter au stockage (stack strict)
+      prop.storage = prop.storage || { items: [] };
+      const key = JSON.stringify({ type: line.type, name: line.name, base: line.base, custom: line.custom });
+      const match = prop.storage.items.find(i => JSON.stringify({ type: i.type, name: i.name, base: i.base, custom: i.custom }) === key);
+      if (match) match.qty += qty; else prop.storage.items.push({ ...line, qty });
+      setOwned(prop);
+
+      const e = new EmbedBuilder()
+        .setColor(C.success)
+        .setTitle('⬆️ Dépôt effectué')
+        .setDescription(`**${qty}× ${displayName(line)}** → **${prop.name}**`)
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [e] });
+    }
+
+    if (sub === 'retrait') {
+      if (!pid) {
+        return interaction.reply({
+          embeds: [ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et **choisis dans la liste** (autocomplete).') ],
+          ephemeral: true
+        });
+      }
+      prop = findOwnedById(pid);
+      if (!prop) return interaction.reply({ content: 'Propriété introuvable.', ephemeral: true });
+      if (!canDo(prop, uid, 'retrait')) return interaction.reply({ content: 'Accès retrait refusé.', ephemeral: true });
+
+      const itemName = interaction.options.getString('item');
+      const qty = interaction.options.getInteger('quantite');
+
+      prop.storage = prop.storage || { items: [] };
+      const line = prop.storage.items.find(i => displayName(i).toLowerCase() === itemName.toLowerCase());
+      if (!line) return interaction.reply({ content: 'Item introuvable dans le stockage.', ephemeral: true });
+      if (line.qty < qty) return interaction.reply({ content: 'Quantité insuffisante en stockage.', ephemeral: true });
+
+      // retirer du stockage
+      line.qty -= qty;
+      if (line.qty <= 0) prop.storage.items = prop.storage.items.filter(i => i !== line);
+      setOwned(prop);
+
+      // ajouter à l’inventaire (stack strict)
+      const inv = getUserInv(uid);
+      const key = JSON.stringify({ type: line.type, name: line.name, base: line.base, custom: line.custom });
+      const match = inv.items.find(i => JSON.stringify({ type: i.type, name: i.name, base: i.base, custom: i.custom }) === key);
+      if (match) match.qty += qty; else inv.items.push({ ...line, qty });
+      setUserInv(uid, inv);
+
+      const e = new EmbedBuilder()
+        .setColor(C.success)
+        .setTitle('⬇️ Retrait effectué')
+        .setDescription(`**${qty}× ${displayName(line)}** ← **${prop.name}**`)
+        .setTimestamp();
+
+      return interaction.reply({ embeds: [e] });
+    }
+  }
 };
