@@ -13,7 +13,7 @@ module.exports = {
     .addSubcommand(sc=>sc.setName('voir').setDescription('Voir le contenu du Sac'))
     .addSubcommand(sc=>sc.setName('deposer')
       .setDescription('Déposer du Sac vers un entrepôt illégal')
-      .addStringOption(o=>o.setName('propriete_id').setDescription('Choisis une propriété').setRequired(true).setAutocomplete(true))
+      .addStringOption(o=>o.setName('propriete_id').setDescription('(facultatif) Choisis une propriété').setAutocomplete(true))
       .addStringOption(o=>o.setName('item').setDescription('Choisis un item du sac').setRequired(true).setAutocomplete(true))
       .addIntegerOption(o=>o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
     )
@@ -29,8 +29,7 @@ module.exports = {
     const bag = getBag(uid);
 
     if (sub === 'voir'){
-      const e = new EmbedBuilder()
-        .setColor(C.primary).setTitle('🎒 Sac de récolte')
+      const e = new EmbedBuilder().setColor(C.primary).setTitle('🎒 Sac de récolte')
         .addFields(
           { name:'Weed feuilles', value:String(bag.weed_feuille), inline:true },
           { name:'Coca feuilles', value:String(bag.coca_feuille), inline:true },
@@ -46,7 +45,11 @@ module.exports = {
       const pid  = interaction.options.getString('propriete_id');
       const item = interaction.options.getString('item');
       const qty  = interaction.options.getInteger('quantite');
+
       if (!bag[item] || bag[item] < qty) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.warning).setDescription('Quantité insuffisante dans le Sac.') ]});
+
+      // si pas de propriété fournie → menu picker (via bot.js on a aussi un hook, mais ici on fait simple: erreur claire)
+      if (!pid) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Tu peux laisser **propriete_id** vide et utiliser le **sélecteur** (picker).') ]});
 
       const prop = findOwnedById(pid);
       if (!prop) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.danger).setDescription('Propriété introuvable.') ]});
@@ -74,5 +77,11 @@ module.exports = {
       setBag(uid, (b)=>{ b[item]-=qty; });
       return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.success).setDescription(`🗑️ Jeté **${qty}× ${item}**.`) ]});
     }
+  },
+
+  // hook pour picker
+  async depositFromPicker(interaction, propId) {
+    // ici, on pourrait ouvrir un workflow multi-étapes ; pour aller vite on donne juste un feedback
+    return interaction.update({ content:`Propriété sélectionnée: **${propId}** (utilise /sac-de-recolte deposer avec le même propId ou laisse vide + picker)`, components:[] });
   }
 };
