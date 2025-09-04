@@ -17,9 +17,7 @@ module.exports = {
     .setDescription('Sessions de traitement (30s/tick)')
     .addSubcommand(sc => sc.setName('demarrer')
       .setDescription('Démarrer une session')
-      // Requis d’abord
       .addStringOption(o=>o.setName('recette').setDescription('Choisis une recette').setRequired(true).setAutocomplete(true))
-      // Puis l’option facultative
       .addStringOption(o=>o.setName('propriete_id').setDescription('(facultatif) laisse vide pour menu').setRequired(false).setAutocomplete(true))
     )
     .addSubcommand(sc => sc.setName('stop').setDescription('Stopper la session & récap')),
@@ -32,8 +30,7 @@ module.exports = {
       const pid = interaction.options.getString('propriete_id');
       if (SESS.has(uid)) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.warning).setDescription('Tu as déjà une session. Utilise **/traitement stop**.')]});
       if (!pid) {
-        // Le picker est géré dans bot.js via PROP_PICK:traitement_start
-        return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et utilise le **sélecteur** (picker) pour choisir ton site.')]});
+        return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et utilise le **sélecteur** (autocomplete) pour choisir ton site.')]});
       }
       return startTreatment(interaction, pid);
     }
@@ -50,7 +47,6 @@ module.exports = {
     }
   },
 
-  // hook picker (utilisé par bot.js)
   async startFromPicker(interaction, propId) { return startTreatment(interaction, propId, true); }
 };
 
