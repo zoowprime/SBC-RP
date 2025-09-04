@@ -58,6 +58,21 @@ try {
 const { handleTicketInteraction, initTicketPanel } = require('./ticket');
 
 // ───────────────────────────────────────────────────────────────────────────────
+// 3.1) Autocomplete (imports)
+const {
+  autoDrogueLieux,
+  autoDrogueTypes,
+  autoOwnedIllegalProps,
+  autoSacItems,
+  autoRecettesForProperty, // (garde au cas où)
+  autoRecolteType,
+  autoRecolteLieu,
+  autoIllegalOrderItems,
+} = require('./auto');
+const { db } = require('./utils/properties');
+const { getIllegalType, recipeAllowed } = require('./utils/illegal');
+
+// ───────────────────────────────────────────────────────────────────────────────
 // 4) Chargement des commandes slash (src/commands/*.js)
 client.commands = new Collection();
 const commandsPath = path.join(__dirname, 'commands');
@@ -82,6 +97,16 @@ if (fs.existsSync(commandsPath)) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
+/** Helper filtre/autocomplete générique */
+function toChoices(list, query, getLabel = (x)=>x, getValue = (x)=>x) {
+  const q = (query || '').toString().trim().toLowerCase();
+  return list
+    .filter(x => !q || getLabel(x).toLowerCase().includes(q))
+    .slice(0, 25)
+    .map(x => ({ name: getLabel(x), value: getValue(x) }));
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
 // 5) Ready
 client.once(Events.ClientReady, async () => {
   await sendLog(`✅ Connecté en tant que ${client.user.tag} • App: ${CLIENT_ID || 'N/A'} • Guild: ${GUILD_ID || 'N/A'}`);
@@ -103,7 +128,91 @@ client.on(Events.InteractionCreate, async (interaction) => {
   // Tickets (selects + boutons) — ne renvoie rien si non concerné
   await handleTicketInteraction(interaction);
 
-  // Slash-commands
+  // ── Autocomplete ────────────────────────────────────────────────────────────
+  if (interaction.isAutocomplete()) {
+    try {
+      const cmd = interaction.commandName;
+      const focused = interaction.options.getFocused(true); // { name, value }
+      let choices = [];
+
+      // /drogue vendre → type, lieu
+      if (cmd === 'drogue') {
+        if (focused.name === 'type') {
+          choices = autoDrogueTypes(focused.value);
+        } else if (focused.name === 'lieu') {
+          choices = autoDrogueLieux(focused.value);
+        }
+      }
+
+      // /sac-de-recolte deposer|jeter → item ; deposer → propriete_id
+      if (cmd === 'sac-de-recolte') {
+        if (focused.name === 'item') {
+          choices = autoSacItems(interaction.user.id, focused.value);
+        } else if (focused.name === 'propriete_id') {
+          choices = autoOwnedIllegalProps(interaction.user.id, focused.value, null);
+        }
+      }
+
+      // /recolte demarrer → type & lieu (lieu dépend du type si déjà saisi)
+      if (cmd === 'recolte') {
+        if (focused.name === 'type') {
+          choices = autoRecolteType(focused.value);
+        } else if (focused.name === 'lieu') {
+          const type = interaction.options.getString('type');
+          choices = autoRecolteLieu(type, focused.value);
+        }
+      }
+
+      // /traitement demarrer → propriete_id & recette (filtre par type si possible)
+      if (cmd === 'traitement') {
+        if (focused.name === 'propriete_id') {
+          choices = autoOwnedIllegalProps(interaction.user.id, focused.value, null);
+        } else if (focused.name === 'recette') {
+          const propId = interaction.options.getString('propriete_id');
+          if (propId) {
+            const store = db();
+            const prop = (store.owned || []).find(p => p.id === propId);
+            const ptype = prop ? (prop.ptype || getIllegalType(prop)) : null;
+            const all = [
+              'weed_pochon','weed_final',
+              'coke_poudre','coke_final',
+              'meth_pierre','meth_final',
+              'crack_roche','crack_final',
+            ];
+            const filtered = ptype ? all.filter(r => recipeAllowed(ptype, r)) : all;
+            choices = toChoices(filtered, focused.value, x => x, x => x);
+          } else {
+            choices = autoRecettesForProperty(null, focused.value);
+          }
+        }
+      }
+
+      // /commande-illegale acheter → item + propriete_id (filtré par type selon item)
+      if (cmd === 'commande-illegale') {
+        if (focused.name === 'item') {
+          choices = autoIllegalOrderItems(focused.value);
+        } else if (focused.name === 'propriete_id') {
+          const item = interaction.options.getString('item');
+          const map = {
+            jerrican_acide: 'meth',
+            meth_liquide: 'meth',
+            bicarbonate: 'crack',
+            crack_precurseur: 'crack',
+          };
+          const filterType = map[item] || null;
+          choices = autoOwnedIllegalProps(interaction.user.id, focused.value, filterType);
+        }
+      }
+
+      await interaction.respond(choices);
+    } catch (e) {
+      console.error('⚠️ Autocomplete error:', e?.message || e);
+      try { await interaction.respond([]); } catch {}
+    }
+    return;
+  }
+
+  // ── Slash-commands ──────────────────────────────────────────────────────────
   if (interaction.isChatInputCommand()) {
     const cmd = client.commands.get(interaction.commandName);
     if (!cmd) {
