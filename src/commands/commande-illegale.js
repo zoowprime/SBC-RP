@@ -1,7 +1,7 @@
 // src/commands/commande-illegale.js
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const { readJSON, writeJSON } = require('../utils/store');
-const { findOwnedById, setOwned } = require('../utils/properties');
+const { findOwnedById, setOwned, db:propdb } = require('../utils/properties');
 const { getIllegalType, accepts } = require('../utils/illegal');
 const { getUser, setUser } = require('../economy');
 
@@ -10,12 +10,10 @@ const PRICE_PER_UNIT = 100;
 const DAILY_LIMIT = 10;
 
 const ITEMS = [
-  // METH
-  { key:'jerrican_acide', label:'Jerrican d’Acide', for:'meth' },
-  { key:'meth_liquide',   label:'Meth (liquide)',   for:'meth' },
-  // CRACK
-  { key:'bicarbonate',    label:'Bicarbonate',      for:'crack' },
-  { key:'crack_precurseur', label:'Précurseur Crack', for:'crack' },
+  { key:'jerrican_acide',  label:'Jerrican d’Acide (METH)', for:'meth' },
+  { key:'meth_liquide',    label:'Meth (liquide) (METH)',   for:'meth' },
+  { key:'bicarbonate',     label:'Bicarbonate (CRACK)',     for:'crack' },
+  { key:'crack_precurseur',label:'Précurseur Crack (CRACK)',for:'crack' },
 ];
 
 function loadOrders(){ return readJSON('illegal_orders.json', { users:{} }); }
@@ -29,9 +27,9 @@ module.exports = {
     .addSubcommand(sc=>sc.setName('panneau').setDescription('Publier un panneau de commande dans ce salon'))
     .addSubcommand(sc=>sc.setName('acheter')
       .setDescription('Commander un item et le déposer dans votre site')
-      .addStringOption(o=>o.setName('item').setDescription(ITEMS.map(i=>i.key).join(' | ')).setRequired(true))
+      .addStringOption(o=>o.setName('item').setDescription('Choisis un item').setRequired(true).setAutocomplete(true))
       .addIntegerOption(o=>o.setName('quantite').setDescription('1 à 10').setMinValue(1).setMaxValue(10).setRequired(true))
-      .addStringOption(o=>o.setName('propriete_id').setDescription('ID de votre Brickade (meth) ou Labo (crack)').setRequired(true))
+      .addStringOption(o=>o.setName('propriete_id').setDescription('Choisis ton site (selon l’item)').setRequired(true).setAutocomplete(true))
     ),
 
   async execute(interaction){
@@ -41,7 +39,7 @@ module.exports = {
       const menu = new StringSelectMenuBuilder()
         .setCustomId('illegal_select_item')
         .setPlaceholder('Choisis un item')
-        .addOptions(ITEMS.map(i => ({ label:i.label, value:i.key, description:`Pour ${i.for.toUpperCase()} — ${PRICE_PER_UNIT}$ / unité` })));
+        .addOptions(ITEMS.map(i => ({ label:i.label, value:i.key, description:`${PRICE_PER_UNIT}$ / unité` })));
 
       const row = new ActionRowBuilder().addComponents(menu);
       const e = new EmbedBuilder()
@@ -92,7 +90,7 @@ module.exports = {
       econ.current.liquid -= cost;
       setUser(interaction.guildId, interaction.user.id, (u)=>{ u.frozen=econ.frozen; u.current=econ.current; u.business=econ.business; });
 
-      // dépôt immédiat dans stockage
+      // dépôt immédiat
       prop.storage = prop.storage || { items:[] };
       const same = prop.storage.items.find(i => (i.type==='raw'||i.type==='mid') && i.name===itemKey);
       if (same) same.qty += qty; else prop.storage.items.push({ type:'raw', name:itemKey, qty });
