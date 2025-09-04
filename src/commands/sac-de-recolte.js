@@ -13,10 +13,8 @@ module.exports = {
     .addSubcommand(sc => sc.setName('voir').setDescription('Voir le contenu du Sac'))
     .addSubcommand(sc => sc.setName('deposer')
       .setDescription('Déposer du Sac vers un entrepôt illégal')
-      // Requis en premier (règle Discord)
       .addStringOption(o => o.setName('item').setDescription('Choisis un item du sac').setRequired(true).setAutocomplete(true))
       .addIntegerOption(o => o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
-      // Option facultative ensuite
       .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) Choisis une propriété').setRequired(false).setAutocomplete(true))
     )
     .addSubcommand(sc => sc.setName('jeter')
@@ -51,11 +49,9 @@ module.exports = {
       if (!bag[item] || bag[item] < qty) {
         return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.warning).setDescription('Quantité insuffisante dans le Sac.') ]});
       }
-
-      // Astuce UX : si pas de propriété, on informe du picker (le hook picker est géré dans bot.js)
       if (!pid) {
         return interaction.reply({
-          embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et utilise le **sélecteur** (picker) pour choisir ton site.') ]
+          embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et utilise le **sélecteur** (autocomplete) pour choisir ton site.') ]
         });
       }
 
@@ -87,7 +83,7 @@ module.exports = {
     }
   },
 
-  // hook pour picker (utilisé par bot.js)
+  // hook pour picker (si tu l’utilises plus tard)
   async depositFromPicker(interaction, propId) {
     return interaction.update({
       content:`Propriété sélectionnée: **${propId}**. Relance **/sac-de-recolte deposer** (tu peux laisser propriete_id vide et reprendre via le picker).`,
