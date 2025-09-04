@@ -1,16 +1,21 @@
+// src/utils/harvest.js — Sac de récolte
 const { readJSON, writeJSON } = require('./store');
+const FILE = 'harvest_bags.json';
 
-function loadBags(){ return readJSON('harvest_bags.json', { users:{} }); }
-function saveBags(db){ writeJSON('harvest_bags.json', db); }
+function load(){ const db = readJSON(FILE, { users:{} }); if(!db.users) db.users={}; return db; }
+function save(db){ writeJSON(FILE, db); }
 
-function ensure(db, uid){
-  if (!db.users[uid]) db.users[uid] = {
-    weed_feuille: 0, coca_feuille: 0, coca_poudre: 0,
-    jerrican_acide: 0, meth_liquide: 0
+function getBag(userId){
+  const db = load(); db.users[userId] = db.users[userId] || {
+    weed_feuille:0, coca_feuille:0, coca_poudre:0, jerrican_acide:0, meth_liquide:0
   };
-  return db.users[uid];
+  save(db); return db.users[userId];
 }
-function getBag(uid){ const db=loadBags(); const b=ensure(db,uid); saveBags(db); return b; }
-function setBag(uid, fn){ const db=loadBags(); const b=ensure(db,uid); fn(b); saveBags(db); return b; }
+function setBag(userId, mutator){
+  const db = load(); db.users[userId] = db.users[userId] || {
+    weed_feuille:0, coca_feuille:0, coca_poudre:0, jerrican_acide:0, meth_liquide:0
+  };
+  mutator(db.users[userId]); save(db);
+}
 
 module.exports = { getBag, setBag };
