@@ -6,10 +6,9 @@ const { getUserInv, setUserInv } = require('../utils/inventory');
 
 const C = { primary:0x5865F2, success:0x57F287, warning:0xFEE75C, danger:0xED4245 };
 
-// sessions en mémoire : userId -> { pid, ptype, recipe, started, produced, timer, chanId }
+// userId -> { pid, ptype, recipe, started, produced, timer, chanId }
 const SESS = new Map();
 
-// par tick (30s), on tente de fabriquer 1 unité (si ressources OK) selon les ratios :
 function canConsume(pool, name, need) {
   const row = pool.find(i => (i.type==='raw'||i.type==='mid') && i.name===name);
   return !!row && row.qty >= need;
@@ -30,12 +29,10 @@ module.exports = {
     .setDescription('Sessions de traitement (30s/tick)')
     .addSubcommand(sc => sc.setName('demarrer')
       .setDescription('Démarrer une session de traitement')
-      .addStringOption(o=>o.setName('propriete_id').setDescription('ID propriété').setRequired(true))
-      .addStringOption(o=>o.setName('recette').setDescription('weed_pochon|weed_final|coke_poudre|coke_final|meth_pierre|meth_final|crack_roche|crack_final').setRequired(true))
+      .addStringOption(o=>o.setName('propriete_id').setDescription('Choisis une propriété').setRequired(true).setAutocomplete(true))
+      .addStringOption(o=>o.setName('recette').setDescription('Choisis une recette autorisée').setRequired(true).setAutocomplete(true))
     )
-    .addSubcommand(sc => sc.setName('stop')
-      .setDescription('Arrêter votre session et afficher le récap')
-    ),
+    .addSubcommand(sc => sc.setName('stop').setDescription('Arrêter la session & récap')),
 
   async execute(interaction){
     const sub = interaction.options.getSubcommand();
@@ -61,41 +58,32 @@ module.exports = {
       if (!can) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.danger).setDescription('Accès production refusé.')]});
 
       prop.storage = prop.storage || { items:[] };
-      const pool = prop.storage.items;
-
-      // message d’annonce
-      const startMsg = new EmbedBuilder()
-        .setColor(C.primary)
-        .setTitle('⚗️ Traitement démarré')
-        .setDescription(`Site: **${prop.name}** *(type ${ptype})*\nRecette: **${recipe}**\nTick: **30 secondes**\nUtilise **/traitement stop** pour terminer.`)
-        .setFooter({ text:`Propriété ${prop.id}` })
-        .setTimestamp();
-      await interaction.reply({ embeds:[startMsg] });
+      await interaction.reply({
+        embeds:[ new EmbedBuilder()
+          .setColor(C.primary)
+          .setTitle('⚗️ Traitement démarré')
+          .setDescription(`Site: **${prop.name}** *(type ${ptype})*\nRecette: **${recipe}**\nTick: **30 secondes**\nUtilise **/traitement stop** pour terminer.`)
+          .setFooter({ text:`Propriété ${prop.id}` })
+        ]
+      });
 
       const chanId = interaction.channelId;
       const timer = setInterval(async () => {
-        // À chaque tick, tenter 1 production selon recette:
-        const p = findOwnedById(pid); // re-load
-        if (!p) { clearInterval(SESS.get(uid)?.timer); SESS.delete(uid); return; }
+        const p = findOwnedById(pid); if (!p) { clearInterval(SESS.get(uid)?.timer); SESS.delete(uid); return; }
         p.storage = p.storage || { items:[] };
         const items = p.storage.items;
+        let ok = false;
 
-        let ok = false; // a produit ?
-        // map logique par recette (1 unité / tick)
         if (recipe === 'weed_pochon') {
-          if (canConsume(items, 'weed_feuille', 5)) {
-            consume(items, 'weed_feuille', 5, p); addMid(items, 'weed_pochon', 1); ok = true;
-          }
+          if (canConsume(items, 'weed_feuille', 5)) { consume(items, 'weed_feuille', 5, p); addMid(items, 'weed_pochon', 1); ok = true; }
         } else if (recipe === 'weed_final') {
           const row = items.find(i=>i.type==='mid' && i.name==='weed_pochon');
           if (row && row.qty >= 1) {
             row.qty -= 1; if (row.qty<=0) p.storage.items = items.filter(x=>x!==row);
-            // final dans inventaire joueur
             const inv = getUserInv(uid);
             const same = inv.items.find(i=>i.type==='drug_final' && i.base==='weed' && !i.custom);
             if (same) same.qty += 1; else inv.items.push({ type:'drug_final', name:'weed', base:'weed', custom:null, qty:1 });
-            setUserInv(uid, inv);
-            ok = true;
+            setUserInv(uid, inv); ok=true;
           }
         } else if (recipe === 'coke_poudre') {
           if (canConsume(items, 'coca_feuille', 3)) { consume(items, 'coca_feuille', 3, p); addMid(items, 'coca_poudre', 1); ok=true; }
@@ -138,20 +126,18 @@ module.exports = {
         }
 
         if (ok) {
-          const s = SESS.get(uid);
-          if (s) s.produced += 1;
+          const s = SESS.get(uid); if (s) s.produced = (s.produced||0) + 1;
           setOwned(p);
           try {
             const ch = await interaction.client.channels.fetch(chanId);
-            await ch.send({ embeds:[ new EmbedBuilder().setColor(C.success).setDescription(`✅ +1 **${recipe}** (session: **${(s?.produced||0)}**) — Site: **${p.name}**`) ]});
+            await ch.send({ embeds:[ new EmbedBuilder().setColor(C.success).setDescription(`✅ +1 **${recipe}** (session: **${SESS.get(uid)?.produced || 0}**) — Site: **${p.name}**`) ]});
           } catch {}
         } else {
-          // plus d’ingrédients → stop auto
           clearInterval(SESS.get(uid)?.timer);
           SESS.delete(uid);
           try {
             const ch = await interaction.client.channels.fetch(chanId);
-            await ch.send({ embeds:[ new EmbedBuilder().setColor(C.warning).setTitle('⛔ Session arrêtée (stock insuffisant)').setDescription(`Dernier site: **${p.name}** — Recette **${recipe}**`)]});
+            await ch.send({ embeds:[ new EmbedBuilder().setColor(C.warning).setTitle('⛔ Session arrêtée (stock insuffisant)').setDescription(`Recette **${recipe}** — Site: **${p.name}**`)]});
           } catch {}
         }
       }, 30000);
