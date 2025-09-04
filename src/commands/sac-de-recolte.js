@@ -1,3 +1,4 @@
+// src/commands/sac-de-recolte.js
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { getBag, setBag } = require('../utils/harvest');
 const { findOwnedById, setOwned } = require('../utils/properties');
@@ -12,13 +13,13 @@ module.exports = {
     .addSubcommand(sc=>sc.setName('voir').setDescription('Voir le contenu du Sac'))
     .addSubcommand(sc=>sc.setName('deposer')
       .setDescription('Déposer du Sac vers un entrepôt illégal')
-      .addStringOption(o=>o.setName('propriete_id').setDescription('ID propriété').setRequired(true))
-      .addStringOption(o=>o.setName('item').setDescription('weed_feuille | coca_feuille | coca_poudre | jerrican_acide | meth_liquide').setRequired(true))
+      .addStringOption(o=>o.setName('propriete_id').setDescription('Choisis une propriété').setRequired(true).setAutocomplete(true))
+      .addStringOption(o=>o.setName('item').setDescription('Choisis un item du sac').setRequired(true).setAutocomplete(true))
       .addIntegerOption(o=>o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
     )
     .addSubcommand(sc=>sc.setName('jeter')
       .setDescription('Détruire une partie du Sac')
-      .addStringOption(o=>o.setName('item').setDescription('weed_feuille | coca_feuille | coca_poudre | jerrican_acide | meth_liquide').setRequired(true))
+      .addStringOption(o=>o.setName('item').setDescription('Choisis un item du sac').setRequired(true).setAutocomplete(true))
       .addIntegerOption(o=>o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
     ),
 
@@ -53,7 +54,6 @@ module.exports = {
       if (!ptype) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.danger).setDescription('Cette propriété n’est pas un site illégal reconnu.') ]});
       if (!accepts(ptype, item)) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.warning).setDescription(`Cet entrepôt **${ptype}** n’accepte pas **${item}**.`) ]});
 
-      // droits: proprio ou "depôt"
       const owner = prop.ownerId === uid;
       const guest = (prop.access||[]).some(a => a.userId===uid && (a.rights||[]).includes('depôt'));
       if (!owner && !guest) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.danger).setDescription('Accès dépôt refusé.') ]});
