@@ -15,7 +15,6 @@ function summarizeStorage(p) {
   const items = (p.storage?.items || []);
   if (!items.length) return '_Vide._';
 
-  // regrouper par type
   const groups = {};
   for (const it of items) {
     const key = it.type || 'autre';
@@ -38,6 +37,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('stockage')
     .setDescription('Stockages de propriétés (ouvrir / dépôt / retrait)')
+
     .addSubcommand(sc => sc.setName('ouvrir')
       .setDescription('Ouvrir un stockage de propriété')
       .addStringOption(o => o
@@ -47,24 +47,27 @@ module.exports = {
         .setAutocomplete(true)
       )
     )
+
+    // ⚠️ Requis d’abord, puis option facultative (ordre corrigé)
     .addSubcommand(sc => sc.setName('depot')
       .setDescription('Déposer un item de ton inventaire vers la propriété')
-      .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) ID ou sélection menu').setRequired(false).setAutocomplete(true))
       .addStringOption(o => o.setName('item').setDescription('Nom affiché (exact)').setRequired(true))
       .addIntegerOption(o => o.setName('quantite').setDescription('Quantité').setMinValue(1).setRequired(true))
+      .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) ID ou sélection menu').setRequired(false).setAutocomplete(true))
     )
+
+    // ⚠️ Requis d’abord, puis option facultative (ordre corrigé)
     .addSubcommand(sc => sc.setName('retrait')
       .setDescription('Retirer un item du stockage vers ton inventaire')
-      .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) ID ou sélection menu').setRequired(false).setAutocomplete(true))
       .addStringOption(o => o.setName('item').setDescription('Nom affiché (exact)').setRequired(true))
       .addIntegerOption(o => o.setName('quantite').setDescription('Quantité').setMinValue(1).setRequired(true))
+      .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) ID ou sélection menu').setRequired(false).setAutocomplete(true))
     ),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
     const uid = interaction.user.id;
 
-    // récup éventuelle de la propriété via autocomplete
     const pid = interaction.options.getString('propriete_id');
     let prop = null;
 
@@ -76,7 +79,7 @@ module.exports = {
           embeds: [ new EmbedBuilder()
             .setColor(C.primary)
             .setTitle('📦 Ouvrir un stockage')
-            .setDescription('Clique dans le champ **propriete_id** de la commande et **sélectionne ta propriété** dans la liste (autocomplete).')
+            .setDescription('Clique dans le champ **propriete_id** de la commande et **sélectionne ta propriété** (autocomplete).')
           ]
         });
       }
@@ -113,12 +116,10 @@ module.exports = {
       if (!line) return interaction.reply({ content: 'Item introuvable dans ton inventaire.', ephemeral: true });
       if (line.qty < qty) return interaction.reply({ content: 'Quantité insuffisante.', ephemeral: true });
 
-      // retirer de l’inventaire
       line.qty -= qty;
       if (line.qty <= 0) inv.items = inv.items.filter(i => i !== line);
       setUserInv(uid, inv);
 
-      // ajouter au stockage (stack strict)
       prop.storage = prop.storage || { items: [] };
       const key = JSON.stringify({ type: line.type, name: line.name, base: line.base, custom: line.custom });
       const match = prop.storage.items.find(i => JSON.stringify({ type: i.type, name: i.name, base: i.base, custom: i.custom }) === key);
@@ -153,12 +154,10 @@ module.exports = {
       if (!line) return interaction.reply({ content: 'Item introuvable dans le stockage.', ephemeral: true });
       if (line.qty < qty) return interaction.reply({ content: 'Quantité insuffisante en stockage.', ephemeral: true });
 
-      // retirer du stockage
       line.qty -= qty;
       if (line.qty <= 0) prop.storage.items = prop.storage.items.filter(i => i !== line);
       setOwned(prop);
 
-      // ajouter à l’inventaire (stack strict)
       const inv = getUserInv(uid);
       const key = JSON.stringify({ type: line.type, name: line.name, base: line.base, custom: line.custom });
       const match = inv.items.find(i => JSON.stringify({ type: i.type, name: i.name, base: i.base, custom: i.custom }) === key);
