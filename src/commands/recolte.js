@@ -7,21 +7,18 @@ const ZONES = { weed:['mont chiliad','chiliad','mt chiliad'], coke:['grapeseed']
 function norm(s){ return (s||'').toString().trim().toLowerCase(); }
 function zoneOk(type, lieu){ return (ZONES[type]||[]).includes(norm(lieu)); }
 
-// sessions en mémoire (par reboot ça repart à zéro — c’est voulu pour de l’anti-AFK simple)
 const SESS = new Map(); // userId -> { type, startAt, total, timer, chanId }
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('recolte')
-    .setDescription('Récolte en session (+2 toutes les 30s, dans le Sac)')
+    .setDescription('Récolte en session (+2 toutes les 30s, Sac)')
     .addSubcommand(sc=>sc.setName('demarrer')
       .setDescription('Démarrer une session de récolte')
-      .addStringOption(o=>o.setName('type').setDescription('weed|coke').setRequired(true))
-      .addStringOption(o=>o.setName('lieu').setDescription('Ex: Mont Chiliad / Grapeseed').setRequired(true))
+      .addStringOption(o=>o.setName('type').setDescription('weed|coke').setRequired(true).setAutocomplete(true))
+      .addStringOption(o=>o.setName('lieu').setDescription('Choisis la zone de récolte').setRequired(true).setAutocomplete(true))
     )
-    .addSubcommand(sc=>sc.setName('stop')
-      .setDescription('Stopper votre session et afficher le total')
-    ),
+    .addSubcommand(sc=>sc.setName('stop').setDescription('Stopper et afficher le récap')),
 
   async execute(interaction){
     const sub = interaction.options.getSubcommand();
@@ -49,19 +46,14 @@ module.exports = {
         .setFooter({ text:'Les matières vont dans ton Sac (non échangeable).' });
       await interaction.reply({ embeds:[msg] });
 
-      // tick toutes les 30s
       const chanId = interaction.channelId;
       const timer = setInterval(async () => {
         const s = SESS.get(uid); if (!s) return;
         s.total += 2;
-
-        // alimente le sac
         setBag(uid, (b) => {
           if (type === 'weed') b.weed_feuille += 2;
           else b.coca_feuille += 2;
         });
-
-        // annonce publique légère
         try {
           const ch = await interaction.client.channels.fetch(chanId);
           await ch.send({ embeds:[ new EmbedBuilder()
