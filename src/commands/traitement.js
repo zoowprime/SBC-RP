@@ -17,8 +17,10 @@ module.exports = {
     .setDescription('Sessions de traitement (30s/tick)')
     .addSubcommand(sc => sc.setName('demarrer')
       .setDescription('Démarrer une session')
-      .addStringOption(o=>o.setName('propriete_id').setDescription('(facultatif) laisse vide pour menu').setAutocomplete(true))
+      // Requis d’abord
       .addStringOption(o=>o.setName('recette').setDescription('Choisis une recette').setRequired(true).setAutocomplete(true))
+      // Puis l’option facultative
+      .addStringOption(o=>o.setName('propriete_id').setDescription('(facultatif) laisse vide pour menu').setRequired(false).setAutocomplete(true))
     )
     .addSubcommand(sc => sc.setName('stop').setDescription('Stopper la session & récap')),
 
@@ -28,10 +30,10 @@ module.exports = {
 
     if (sub === 'demarrer'){
       const pid = interaction.options.getString('propriete_id');
-      if (SESS.has(uid)) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.warning).setDescription('Tu as déjà une session. **/traitement stop**.')]});
+      if (SESS.has(uid)) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.warning).setDescription('Tu as déjà une session. Utilise **/traitement stop**.')]});
       if (!pid) {
-        // le picker est géré dans bot.js via PROP_PICK:traitement_start
-        return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et utilise le **sélecteur** (picker).') ]});
+        // Le picker est géré dans bot.js via PROP_PICK:traitement_start
+        return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et utilise le **sélecteur** (picker) pour choisir ton site.')]});
       }
       return startTreatment(interaction, pid);
     }
@@ -48,7 +50,7 @@ module.exports = {
     }
   },
 
-  // hook picker
+  // hook picker (utilisé par bot.js)
   async startFromPicker(interaction, propId) { return startTreatment(interaction, propId, true); }
 };
 
@@ -69,7 +71,8 @@ async function startTreatment(interaction, pid, fromPicker = false) {
   const startMsg = new EmbedBuilder().setColor(C.primary).setTitle('⚗️ Traitement démarré')
     .setDescription(`Site: **${prop.name}** *(type ${ptype})*\nRecette: **${recipe}**\nTick: **30s**\n**/traitement stop** pour terminer.`)
     .setFooter({ text:`Propriété ${prop.id}` }).setTimestamp();
-  if (fromPicker) await interaction.update({ embeds:[startMsg], components:[] }); else await interaction.reply({ embeds:[startMsg] });
+  if (fromPicker) await interaction.update({ embeds:[startMsg], components:[] });
+  else await interaction.reply({ embeds:[startMsg] });
 
   const chanId = interaction.channelId;
   const timer = setInterval(async () => {
@@ -112,12 +115,14 @@ async function startTreatment(interaction, pid, fromPicker = false) {
 
     if (ok) {
       const s = SESS.get(uid); if (s) s.produced = (s.produced||0)+1; setOwned(p);
-      try { const ch = await interaction.client.channels.fetch(chanId);
+      try {
+        const ch = await interaction.client.channels.fetch(chanId);
         await ch.send({ embeds:[ new EmbedBuilder().setColor(C.success).setDescription(`✅ +1 **${recipe}** (session: **${SESS.get(uid)?.produced || 0}**) — Site: **${p.name}**`) ]});
       } catch {}
     } else {
       clearInterval(SESS.get(uid)?.timer); SESS.delete(uid);
-      try { const ch = await interaction.client.channels.fetch(chanId);
+      try {
+        const ch = await interaction.client.channels.fetch(chanId);
         await ch.send({ embeds:[ new EmbedBuilder().setColor(C.warning).setTitle('⛔ Session arrêtée (stock insuffisant)').setDescription(`Recette **${recipe}** — Site: **${p.name}**`)]});
       } catch {}
     }
