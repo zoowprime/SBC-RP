@@ -10,17 +10,19 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('sac-de-recolte')
     .setDescription('Voir / déposer / jeter le Sac')
-    .addSubcommand(sc=>sc.setName('voir').setDescription('Voir le contenu du Sac'))
-    .addSubcommand(sc=>sc.setName('deposer')
+    .addSubcommand(sc => sc.setName('voir').setDescription('Voir le contenu du Sac'))
+    .addSubcommand(sc => sc.setName('deposer')
       .setDescription('Déposer du Sac vers un entrepôt illégal')
-      .addStringOption(o=>o.setName('propriete_id').setDescription('(facultatif) Choisis une propriété').setAutocomplete(true))
-      .addStringOption(o=>o.setName('item').setDescription('Choisis un item du sac').setRequired(true).setAutocomplete(true))
-      .addIntegerOption(o=>o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
+      // Requis en premier (règle Discord)
+      .addStringOption(o => o.setName('item').setDescription('Choisis un item du sac').setRequired(true).setAutocomplete(true))
+      .addIntegerOption(o => o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
+      // Option facultative ensuite
+      .addStringOption(o => o.setName('propriete_id').setDescription('(facultatif) Choisis une propriété').setRequired(false).setAutocomplete(true))
     )
-    .addSubcommand(sc=>sc.setName('jeter')
+    .addSubcommand(sc => sc.setName('jeter')
       .setDescription('Détruire une partie du Sac')
-      .addStringOption(o=>o.setName('item').setDescription('Choisis un item du sac').setRequired(true).setAutocomplete(true))
-      .addIntegerOption(o=>o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
+      .addStringOption(o => o.setName('item').setDescription('Choisis un item du sac').setRequired(true).setAutocomplete(true))
+      .addIntegerOption(o => o.setName('quantite').setDescription('Qté').setMinValue(1).setRequired(true))
     ),
 
   async execute(interaction){
@@ -46,10 +48,16 @@ module.exports = {
       const item = interaction.options.getString('item');
       const qty  = interaction.options.getInteger('quantite');
 
-      if (!bag[item] || bag[item] < qty) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.warning).setDescription('Quantité insuffisante dans le Sac.') ]});
+      if (!bag[item] || bag[item] < qty) {
+        return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.warning).setDescription('Quantité insuffisante dans le Sac.') ]});
+      }
 
-      // si pas de propriété fournie → menu picker (via bot.js on a aussi un hook, mais ici on fait simple: erreur claire)
-      if (!pid) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Tu peux laisser **propriete_id** vide et utiliser le **sélecteur** (picker).') ]});
+      // Astuce UX : si pas de propriété, on informe du picker (le hook picker est géré dans bot.js)
+      if (!pid) {
+        return interaction.reply({
+          embeds:[ new EmbedBuilder().setColor(C.primary).setDescription('❗ Laisse **propriete_id** vide et utilise le **sélecteur** (picker) pour choisir ton site.') ]
+        });
+      }
 
       const prop = findOwnedById(pid);
       if (!prop) return interaction.reply({ embeds:[ new EmbedBuilder().setColor(C.danger).setDescription('Propriété introuvable.') ]});
@@ -79,9 +87,11 @@ module.exports = {
     }
   },
 
-  // hook pour picker
+  // hook pour picker (utilisé par bot.js)
   async depositFromPicker(interaction, propId) {
-    // ici, on pourrait ouvrir un workflow multi-étapes ; pour aller vite on donne juste un feedback
-    return interaction.update({ content:`Propriété sélectionnée: **${propId}** (utilise /sac-de-recolte deposer avec le même propId ou laisse vide + picker)`, components:[] });
+    return interaction.update({
+      content:`Propriété sélectionnée: **${propId}**. Relance **/sac-de-recolte deposer** (tu peux laisser propriete_id vide et reprendre via le picker).`,
+      components: []
+    });
   }
 };
