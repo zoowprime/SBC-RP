@@ -18,7 +18,7 @@ module.exports = (client) => {
 
       // 2) Message Discord avant l’image
       const welcomeMsg =
-        `Bienvenue sur **South Belleshore Crimes RP**, ${member} ! ` +
+        `Bienvenue sur **South Los Angeles RP**, ${member} ! ` +
         `N'hésite pas à prendre connaissance des différents salons à ta disposition !`;
       const channel = member.guild.channels.cache.get(WELCOME_CHAN);
       if (!channel?.isTextBased()) return;
