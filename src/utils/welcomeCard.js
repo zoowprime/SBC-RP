@@ -42,7 +42,7 @@ async function generateCard({ username, avatarURL, memberCount, isWelcome = true
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.font = 'bold 60px sans-serif';
-  const title = isWelcome ? 'Bienvenue sur SBC RP !' : 'Au revoir...';
+  const title = isWelcome ? 'Bienvenue sur SLA: Roleplay !' : 'Au revoir...';
   ctx.fillText(title, width / 2, 20);
 
   // 4) Avatar (si on n’arrive pas à charger, on continue quand même)
